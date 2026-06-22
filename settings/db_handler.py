@@ -168,8 +168,16 @@ class Database:
             weeks[(y, w)][1] += Score.parse_minutes(r.total_time)
         out = []
         for (y, w), (km, mins) in sorted(weeks.items(), reverse=True):
+            # 해당 ISO 주의 월요일~일요일 날짜 범위
+            try:
+                start = datetime.fromisocalendar(y, w, 1)
+                end = datetime.fromisocalendar(y, w, 7)
+                date_range = f"{start.month}/{start.day}~{end.month}/{end.day}"
+            except Exception:
+                date_range = ""
             out.append({
                 "label": f"{y}년 {w}주차",
+                "date_range": date_range,
                 "mileage": round(km, 2),
                 "minutes": int(mins),
                 "bonus": Score.weekly_bonus(km, mins),

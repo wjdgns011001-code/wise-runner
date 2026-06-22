@@ -189,26 +189,6 @@
             .side-panel { width: 100vw; max-width: 100vw; }   /* 폰에선 패널을 전체폭으로 */
             .fab { width: 52px; height: 52px; font-size: 23px; }
             .filter-bar { flex-direction: column; align-items: stretch; }
-
-            /* 반응형 표: 행을 카드로 변환 (table.resp 에만 적용) */
-            table.resp thead { display: none; }
-            table.resp, table.resp tbody, table.resp tr, table.resp td { display: block; width: 100%; }
-            table.resp tr {
-                border: 1px solid #ececf0; border-radius: 10px;
-                margin-bottom: 0.7rem; padding: 0.3rem 0.7rem; background: #fff;
-            }
-            table.resp tr:hover { background: #fff; }
-            table.resp td {
-                border: none; display: flex; justify-content: space-between; align-items: center;
-                gap: 1rem; padding: 0.45rem 0.1rem; text-align: right;
-                border-bottom: 1px solid #f4f4f6;
-            }
-            table.resp td:last-child { border-bottom: none; }
-            table.resp td::before {
-                content: attr(data-label); font-weight: 600; color: #999;
-                text-align: left; white-space: nowrap; font-size: 0.92em;
-            }
-            table.resp td:empty { display: none; }
         }
     </style>
 </head>
