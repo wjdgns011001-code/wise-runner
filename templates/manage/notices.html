@@ -1,0 +1,118 @@
+{% extends "manage/base.html" %}
+{% import "manage/_pagination.html" as pg %}
+{% block content %}
+<div class="card">
+    <div class="flex">
+        <h2>📢 공지사항</h2>
+        <div style="display:flex;align-items:center;gap:1rem;">
+            {% if is_admin %}
+            <span class="badge badge-success">관리자</span>
+            <a href="/manage/logout" style="font-size:0.85rem;color:#888;text-decoration:none;">로그아웃</a>
+            {% else %}
+            <a href="/manage/login?next=/manage/notices" class="refresh-btn">🔐 관리자 로그인</a>
+            {% endif %}
+        </div>
+    </div>
+    {% if msg %}
+    <p style="margin-top:0.8rem;color:#2e7d32;font-size:0.9rem;">✅ {{ msg }}</p>
+    {% endif %}
+</div>
+
+<!-- 점수 기준 (자동 생성 · 고정 공지) -->
+<div class="card" style="border-left:4px solid #1565c0;">
+    <div class="flex">
+        <h2>{{ score_notice.title }}</h2>
+        <span class="badge badge-primary">고정 · 자동</span>
+    </div>
+    <pre style="white-space:pre-wrap;font-family:inherit;font-size:0.95rem;line-height:1.7;margin-top:0.6rem;color:#444;">{{ score_notice.content }}</pre>
+    <p style="margin-top:0.6rem;font-size:0.8rem;color:#999;">※ 이 공지는 실제 점수 산정 로직에서 자동 생성되어 항상 최신 기준을 보여줍니다.</p>
+</div>
+
+<!-- 앱 설치 방법 (고정) -->
+<div class="card" style="border-left:4px solid #2e7d32;">
+    <div class="flex">
+        <h2>{{ install_guide.title }}</h2>
+        <span class="badge badge-success">고정</span>
+    </div>
+    <p style="margin-top:0.5rem;font-size:0.9rem;">앱 주소:
+        <a href="{{ install_guide.app_url }}" style="color:#1565c0;word-break:break-all;">{{ install_guide.app_url }}</a>
+    </p>
+    <p style="font-size:0.82rem;color:#888;margin-top:0.2rem;">홈 화면에 추가하면 주소창 없이 앱처럼 전체화면으로 열립니다.</p>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1rem;margin-top:1rem;">
+        <!-- 안드로이드 -->
+        <div style="background:#fafafa;border-radius:8px;padding:1rem;">
+            <h3 style="font-size:0.95rem;color:#1a1a2e;margin-bottom:0.6rem;">🤖 안드로이드 (크롬)</h3>
+            <ol style="margin-left:1.1rem;font-size:0.9rem;line-height:1.7;color:#444;">
+                {% for s in install_guide.android %}<li>{{ s }}</li>{% endfor %}
+            </ol>
+            {% if install_guide.android_imgs %}
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.8rem;">
+                {% for img in install_guide.android_imgs %}
+                <a href="{{ img }}" target="_blank"><img src="{{ img }}" style="max-width:120px;border:1px solid #eee;border-radius:6px;"></a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p style="font-size:0.78rem;color:#bbb;margin-top:0.6rem;">(캡처 이미지 준비 중)</p>
+            {% endif %}
+        </div>
+        <!-- 아이폰 -->
+        <div style="background:#fafafa;border-radius:8px;padding:1rem;">
+            <h3 style="font-size:0.95rem;color:#1a1a2e;margin-bottom:0.6rem;">🍎 아이폰 (사파리)</h3>
+            <ol style="margin-left:1.1rem;font-size:0.9rem;line-height:1.7;color:#444;">
+                {% for s in install_guide.ios %}<li>{{ s }}</li>{% endfor %}
+            </ol>
+            {% if install_guide.ios_imgs %}
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.8rem;">
+                {% for img in install_guide.ios_imgs %}
+                <a href="{{ img }}" target="_blank"><img src="{{ img }}" style="max-width:120px;border:1px solid #eee;border-radius:6px;"></a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p style="font-size:0.78rem;color:#bbb;margin-top:0.6rem;">(캡처 이미지 준비 중)</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% if is_admin %}
+<div class="card">
+    <h2>✍️ 공지 작성</h2>
+    <form method="post" action="/manage/notices/add" style="display:flex;flex-direction:column;gap:0.8rem;">
+        <input type="text" name="title" placeholder="제목" required
+               style="padding:0.6rem 0.8rem;border:1px solid #ddd;border-radius:4px;">
+        <textarea name="content" placeholder="내용" rows="4"
+                  style="padding:0.6rem 0.8rem;border:1px solid #ddd;border-radius:4px;font-family:inherit;resize:vertical;"></textarea>
+        <button type="submit" class="refresh-btn" style="align-self:flex-start;">등록</button>
+    </form>
+</div>
+{% endif %}
+
+<div class="card">
+    <h2>📋 공지 목록</h2>
+    {% if notices %}
+    {% for n in notices %}
+    <div style="padding:1rem 0;border-bottom:1px solid #eee;">
+        <div class="flex">
+            <strong style="font-size:1rem;">{{ n.title }}</strong>
+            <span style="display:flex;align-items:center;gap:0.8rem;">
+                <span style="font-size:0.8rem;color:#999;">{{ n.created_at }}</span>
+                {% if is_admin %}
+                <form method="post" action="/manage/notices/delete/{{ n.id }}"
+                      style="display:inline;" onsubmit="return confirm('이 공지를 삭제할까요?');">
+                    <button type="submit" class="badge badge-warning" style="border:none;cursor:pointer;">🗑 삭제</button>
+                </form>
+                {% endif %}
+            </span>
+        </div>
+        {% if n.content %}
+        <pre style="white-space:pre-wrap;font-family:inherit;font-size:0.9rem;line-height:1.6;margin-top:0.5rem;color:#555;">{{ n.content }}</pre>
+        {% endif %}
+    </div>
+    {% endfor %}
+    {% else %}
+    <p style="text-align:center;padding:1.5rem;color:#999;">등록된 추가 공지가 없습니다.</p>
+    {% endif %}
+    {{ pg.bar('/manage/notices', page, total_pages) }}
+</div>
+{% endblock %}

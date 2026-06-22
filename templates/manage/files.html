@@ -1,0 +1,72 @@
+{% extends "manage/base.html" %}
+{% import "manage/_pagination.html" as pg %}
+{% block content %}
+<div class="card">
+    <div class="flex">
+        <h2>📁 자료실</h2>
+        <div style="display:flex;align-items:center;gap:1rem;">
+            <span style="font-size:0.85rem;color:#888;">총 {{ files|length }}개 문서</span>
+            {% if is_admin %}
+            <span class="badge badge-success">관리자</span>
+            <a href="/manage/logout" style="font-size:0.85rem;color:#888;text-decoration:none;">로그아웃</a>
+            {% else %}
+            <a href="/manage/login" class="refresh-btn">🔐 관리자 로그인</a>
+            {% endif %}
+        </div>
+    </div>
+    {% if msg %}
+    <p style="margin-top:0.8rem;color:#2e7d32;font-size:0.9rem;">✅ {{ msg }}</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>⬆️ 문서 업로드</h2>
+    <form method="post" action="/manage/files/upload" enctype="multipart/form-data"
+          style="display:flex;gap:0.8rem;align-items:center;flex-wrap:wrap;">
+        <input type="file" name="file" required
+               style="padding:0.4rem;border:1px solid #ddd;border-radius:4px;background:#fafafa;">
+        <button type="submit" class="refresh-btn">업로드</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>📥 다운로드 목록</h2>
+    <table class="resp">
+        <thead>
+            <tr>
+                <th>파일명</th>
+                <th>크기</th>
+                <th>업로드 일시</th>
+                <th>다운로드 수</th>
+                <th>작업</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if files %}
+            {% for f in files %}
+            <tr>
+                <td data-label="파일명">{{ f.name }}</td>
+                <td data-label="크기" style="white-space:nowrap;">{{ f.size_h }}</td>
+                <td data-label="업로드 일시" style="white-space:nowrap;">{{ f.uploaded_at }}</td>
+                <td data-label="다운로드 수">{{ f.downloads }}</td>
+                <td data-label="작업" style="white-space:nowrap;">
+                    <a href="/manage/files/download/{{ f.id }}" class="badge badge-primary"
+                       style="text-decoration:none;">⬇ 다운로드</a>
+                    {% if is_admin %}
+                    <form method="post" action="/manage/files/delete/{{ f.id }}"
+                          style="display:inline;" onsubmit="return confirm('정말 삭제할까요?');">
+                        <button type="submit" class="badge badge-warning"
+                                style="border:none;cursor:pointer;">🗑 삭제</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            {% else %}
+            <tr><td colspan="5" style="text-align:center;padding:2rem;color:#999;">업로드된 문서가 없습니다.</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+    {{ pg.bar('/manage/files', page, total_pages) }}
+</div>
+{% endblock %}

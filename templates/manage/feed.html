@@ -1,0 +1,90 @@
+{% extends "manage/base.html" %}
+{% import "manage/_pagination.html" as pg %}
+{% block content %}
+<style>
+    .feed-item { display:flex; justify-content:space-between; align-items:center; padding:0.8rem 0; border-bottom:1px solid #f0f0f0; }
+    .feed-item:last-child { border-bottom:none; }
+    .feed-top { font-size:0.98rem; }
+    .feed-date { font-size:0.78rem; color:#999; margin-left:6px; }
+    .feed-sub { font-size:0.85rem; color:#666; margin-top:4px; }
+    .me-tag { background:#fee500; color:#3a2e00; font-size:0.7rem; padding:1px 6px; border-radius:8px; }
+    .like-btn { background:#f5f5f7; border:1px solid #e2e2e6; border-radius:20px; padding:0.4rem 0.8rem; cursor:pointer; font-size:0.95rem; white-space:nowrap; }
+    .like-btn.on { background:#ffeef0; border-color:#ffd2d8; }
+    .like-btn .cnt { font-weight:600; color:#555; }
+    #toast { position:fixed; left:50%; bottom:90px; transform:translateX(-50%) translateY(20px);
+        background:#1a1a2e; color:#fff; padding:0.9rem 1.1rem; border-radius:12px; box-shadow:0 6px 20px rgba(0,0,0,0.3);
+        font-size:0.88rem; line-height:1.5; white-space:pre-line; max-width:90vw; width:340px; opacity:0; pointer-events:none;
+        transition:opacity 0.3s, transform 0.3s; z-index:2000; }
+    #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+
+<div class="card">
+    <div class="flex">
+        <h2>📣 러닝 피드</h2>
+        <div style="display:flex;align-items:center;gap:0.5rem;">
+            {% if me_user %}
+            <span style="font-size:0.85rem;">나: <strong>{{ me_user.name }}</strong></span>
+            <a href="/whoami/clear?next=/manage" style="font-size:0.8rem;color:#888;">변경</a>
+            {% else %}
+            <span style="font-size:0.82rem;color:#888;">나:</span>
+            <select onchange="if(this.value)location.href='/whoami?next=/manage&uid='+encodeURIComponent(this.value)" style="padding:0.4rem 0.6rem;border:1px solid #ddd;border-radius:6px;">
+                <option value="">선택</option>
+                {% for u in users %}
+                <option value="{{ u.user_id }}">{{ u.name }}</option>
+                {% endfor %}
+            </select>
+            {% endif %}
+        </div>
+    </div>
+    {% if not me_user %}
+    <p style="margin-top:0.6rem;font-size:0.85rem;color:#888;">처음 한 번만 본인 이름을 선택하면 이 기기에서 계속 기억됩니다. 🙂</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    {% if feed %}
+    {% for f in feed %}
+    <div class="feed-item">
+        <div>
+            <div class="feed-top"><strong>{{ f.owner_name }}</strong>{% if f.is_me %} <span class="me-tag">나</span>{% endif %}<span class="feed-date">{{ f.date }}</span></div>
+            <div class="feed-sub">🏃 {{ f.distance }}km · ⏱️ {{ f.time }} · 🎁 {{ f.score }}점</div>
+        </div>
+        <button class="like-btn {% if f.liked %}on{% endif %}" data-key="{{ f.key }}" onclick="toggleLike(this)">
+            <span class="heart">{% if f.liked %}❤️{% else %}🤍{% endif %}</span> <span class="cnt">{{ f.likes }}</span>
+        </button>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div style="text-align:center;color:#999;padding:2rem;">아직 등록된 기록이 없습니다.</div>
+    {% endif %}
+    {{ pg.bar('/manage', page, total_pages) }}
+</div>
+
+<div id="toast"></div>
+
+<script>
+    const MY_UID = {{ me | tojson }};
+    async function toggleLike(btn) {
+        if (!MY_UID) { alert('상단에서 본인 이름을 먼저 선택하세요 🙂'); return; }
+        const fd = new FormData();
+        fd.append('uid', MY_UID);
+        fd.append('key', btn.dataset.key);
+        try {
+            const r = await fetch('/api/like', { method: 'POST', body: fd });
+            const d = await r.json();
+            btn.classList.toggle('on', d.liked);
+            btn.querySelector('.heart').textContent = d.liked ? '❤️' : '🤍';
+            btn.querySelector('.cnt').textContent = d.count;
+        } catch (e) {}
+    }
+
+    {% if encourage %}
+    window.addEventListener('load', function () {
+        const t = document.getElementById('toast');
+        t.textContent = {{ encourage | tojson }};
+        requestAnimationFrame(() => t.classList.add('show'));
+        setTimeout(() => t.classList.remove('show'), 6000);
+    });
+    {% endif %}
+</script>
+{% endblock %}

@@ -1,0 +1,107 @@
+{% extends "manage/base.html" %}
+{% import "manage/_pagination.html" as pg %}
+{% block content %}
+<div class="card">
+    <div class="flex">
+        <h2>👤 {{ user_name }} 님 상세</h2>
+        <a href="/manage/dashboard" class="refresh-btn">← 대시보드</a>
+    </div>
+</div>
+
+<!-- 개인 통계 -->
+<div class="card">
+    <h2>📊 개인 통계</h2>
+    <div class="stat-grid">
+        <div class="stat-item"><div class="value">{{ stats.total_runs }}</div><div class="label">러닝 횟수</div></div>
+        <div class="stat-item"><div class="value">{{ stats.total_distance | round(2) }} km</div><div class="label">총 거리</div></div>
+        <div class="stat-item"><div class="value">{{ stats.total_time }}</div><div class="label">총 시간</div></div>
+        <div class="stat-item"><div class="value">{{ stats.best_distance }} km</div><div class="label">최장 거리</div></div>
+        <div class="stat-item"><div class="value">{{ stats.best_cadence }}</div><div class="label">최고 케이던스</div></div>
+        <div class="stat-item"><div class="value">{{ stats.best_calories }}</div><div class="label">최대 칼로리</div></div>
+    </div>
+</div>
+
+<!-- 점수 요약 -->
+<div class="card">
+    <h2>💰 점수 요약</h2>
+    <div class="stat-grid">
+        <div class="stat-item"><div class="value">{{ "{:,}".format(breakdown.daily) }}</div><div class="label">🏃 데일리</div></div>
+        <div class="stat-item"><div class="value">{{ "{:,}".format(breakdown.weekly) }}</div><div class="label">📅 주간 보너스</div></div>
+        <div class="stat-item"><div class="value">{{ "{:,}".format(breakdown.events) }}</div><div class="label">🎽 참가</div></div>
+        <div class="stat-item"><div class="value">{{ "{:,}".format(breakdown.earned) }}</div><div class="label">✨ 총 획득</div></div>
+        <div class="stat-item"><div class="value">-{{ "{:,}".format(breakdown.spent) }}</div><div class="label">🛍️ 사용</div></div>
+        <div class="stat-item"><div class="value" style="color:#1565c0;">{{ "{:,}".format(breakdown.available) }}</div><div class="label">💎 사용 가능</div></div>
+    </div>
+    <p style="margin-top:0.8rem;font-size:0.85rem;color:#888;">
+        러닝 횟수가 적어도 <strong>대회 참가(+1,000~2,000)</strong>나 <strong>주간 보너스</strong>가 크면 총점이 높을 수 있어요. 아래에서 어떻게 모였는지 확인하세요.
+    </p>
+</div>
+
+<!-- 참가 포인트 -->
+<div class="card">
+    <h2>🎽 참가 포인트 <span style="font-size:0.8rem;color:#888;">({{ "{:,}".format(breakdown.events) }}점)</span></h2>
+    <table class="resp">
+        <thead><tr><th>항목</th><th>날짜</th><th>점수</th></tr></thead>
+        <tbody>
+            {% if events %}
+            {% for e in events %}
+            <tr><td data-label="항목">{{ e.label }}</td><td data-label="날짜">{{ e.date }}</td><td data-label="점수"><span class="badge badge-primary">+{{ "{:,}".format(e.points) }}</span></td></tr>
+            {% endfor %}
+            {% else %}
+            <tr><td colspan="3" style="text-align:center;color:#999;padding:1rem;">참가 내역 없음</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+<!-- 주간 보너스 -->
+<div class="card">
+    <h2>📅 주간 보너스 <span style="font-size:0.8rem;color:#888;">({{ weekly_count }}주 · {{ "{:,}".format(breakdown.weekly) }}점)</span></h2>
+    <table class="resp">
+        <thead><tr><th>주차</th><th>누적 거리</th><th>누적 시간(분)</th><th>보너스</th></tr></thead>
+        <tbody>
+            {% if weekly %}
+            {% for w in weekly %}
+            <tr><td data-label="주차">{{ w.label }}</td><td data-label="누적 거리">{{ w.mileage }} km</td><td data-label="누적 시간">{{ w.minutes }}분</td><td data-label="보너스"><span class="badge badge-success">+{{ "{:,}".format(w.bonus) }}</span></td></tr>
+            {% endfor %}
+            {% else %}
+            <tr><td colspan="4" style="text-align:center;color:#999;padding:1rem;">보너스 받은 주 없음</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+    {{ pg.bar('/manage/user/' + user_id, wpage, w_total_pages, '&page=' + page|string, 'wpage') }}
+</div>
+
+<!-- 데일리 기록 -->
+<div class="card">
+    <h2>🏃 데일리 기록 <span style="font-size:0.8rem;color:#888;">({{ record_count }}건 · {{ "{:,}".format(breakdown.daily) }}점)</span></h2>
+    <table class="resp">
+        <thead><tr><th>날짜</th><th>거리</th><th>시간</th><th>데일리 점수</th></tr></thead>
+        <tbody>
+            {% if records %}
+            {% for r in records %}
+            <tr><td data-label="날짜">{{ r.date }}</td><td data-label="거리">{{ r.total_distance }} km</td><td data-label="시간">{{ r.total_time }}</td><td data-label="데일리 점수"><span class="badge badge-success">+{{ r.score }}</span></td></tr>
+            {% endfor %}
+            {% else %}
+            <tr><td colspan="4" style="text-align:center;color:#999;padding:1rem;">기록 없음</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+    {{ pg.bar('/manage/user/' + user_id, page, total_pages, '&wpage=' + wpage|string) }}
+</div>
+
+<!-- 구매 내역 -->
+{% if purchases %}
+<div class="card">
+    <h2>🛍️ 구매 내역 <span style="font-size:0.8rem;color:#888;">(-{{ "{:,}".format(breakdown.spent) }}점)</span></h2>
+    <table class="resp">
+        <thead><tr><th>상품</th><th>일시</th><th>사용 점수</th></tr></thead>
+        <tbody>
+            {% for p in purchases %}
+            <tr><td data-label="상품">{{ p.item }}</td><td data-label="일시">{{ p.created_at }}</td><td data-label="사용 점수"><span class="badge badge-warning">-{{ "{:,}".format(p.cost) }}</span></td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endblock %}

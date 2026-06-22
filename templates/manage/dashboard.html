@@ -1,0 +1,84 @@
+{% extends "manage/base.html" %}
+{% block content %}
+<div class="card">
+    <div class="flex">
+        <h2>📊 대시보드 개요</h2>
+        <a href="/manage/dashboard" class="refresh-btn">🔄 새로고침</a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="stat-grid">
+        <div class="stat-item">
+            <div class="value">{{ stats.total_users }}</div>
+            <div class="label">전체 사용자</div>
+        </div>
+        <div class="stat-item">
+            <div class="value">{{ stats.total_records }}</div>
+            <div class="label">전체 기록</div>
+        </div>
+        <div class="stat-item">
+            <div class="value">{{ stats.total_distance }} km</div>
+            <div class="label">총 누적 거리</div>
+        </div>
+        <div class="stat-item">
+            <div class="value">{{ stats.total_score }}</div>
+            <div class="label">총 점수</div>
+        </div>
+        <div class="stat-item">
+            <div class="value">{{ stats.total_calories }}</div>
+            <div class="label">총 소모 칼로리</div>
+        </div>
+        <div class="stat-item">
+            <div class="value">{{ stats.avg_distance }} km</div>
+            <div class="label">평균 거리</div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>🏆 사용자 랭킹</h2>
+    <p style="font-size:0.85rem;color:#888;margin-bottom:0.8rem;">사용자를 클릭하면 상세 통계와 점수 획득 내역을 볼 수 있어요. (전체 {{ stats.total_users }}명)</p>
+    <table class="resp">
+        <thead>
+            <tr>
+                <th>순위</th>
+                <th>사용자명</th>
+                <th>총 점수</th>
+                <th>총 거리 (km)</th>
+                <th>러닝 횟수</th>
+                <th>최고 기록</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user in rankings %}
+            {% set rank = start_rank + loop.index %}
+            <tr onclick="location.href='/manage/user/{{ user.user_id }}'" style="cursor:pointer;">
+                <td data-label="순위">
+                    {% if rank == 1 %}🥇
+                    {% elif rank == 2 %}🥈
+                    {% elif rank == 3 %}🥉
+                    {% else %}{{ rank }}
+                    {% endif %}
+                </td>
+                <td data-label="사용자명">
+                    <strong style="color:#1565c0;">{{ get_user_name(user.user_id) }}</strong>
+                </td>
+                <td data-label="총 점수"><strong>{{ user.total_point }}</strong> pt</td>
+                <td data-label="총 거리">{{ user.total_distance | round(2) }} km</td>
+                <td data-label="러닝 횟수">{{ user.total_runs }}회</td>
+                <td data-label="최고 기록">{{ user.best_distance }}km</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if total_pages > 1 %}
+    <div class="pagination">
+        {% if page > 1 %}<a href="/manage/dashboard?page={{ page - 1 }}">← 이전</a>{% endif %}
+        <span class="current">{{ page }} / {{ total_pages }}</span>
+        {% if page < total_pages %}<a href="/manage/dashboard?page={{ page + 1 }}">다음 →</a>{% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

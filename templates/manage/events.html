@@ -1,0 +1,90 @@
+{% extends "manage/base.html" %}
+{% import "manage/_pagination.html" as pg %}
+{% block content %}
+<div class="card">
+    <div class="flex">
+        <h2>🎽 대회 참가 · 동호회 참석 등록</h2>
+        <div style="display:flex;align-items:center;gap:1rem;">
+            {% if is_admin %}
+            <span class="badge badge-success">관리자</span>
+            <a href="/manage/logout" style="font-size:0.85rem;color:#888;text-decoration:none;">로그아웃</a>
+            {% else %}
+            <a href="/manage/login?next=/manage/events" class="refresh-btn">🔐 관리자 로그인</a>
+            {% endif %}
+        </div>
+    </div>
+    {% if msg %}
+    <p style="margin-top:0.8rem;color:#2e7d32;font-size:0.9rem;">✅ {{ msg }}</p>
+    {% endif %}
+    <p style="margin-top:0.6rem;font-size:0.85rem;color:#888;">대회 참가 및 동호회 참석을 관리자가 확인 후 직접 등록합니다.</p>
+</div>
+
+{% if is_admin %}
+<div class="card">
+    <h2>➕ 참가 등록</h2>
+    <form method="post" action="/manage/events/add" style="display:flex;gap:0.8rem;flex-wrap:wrap;align-items:flex-end;">
+        <div>
+            <label style="display:block;font-size:0.8rem;color:#666;margin-bottom:0.3rem;">참가자</label>
+            <select name="uid" required style="padding:0.5rem;border:1px solid #ddd;border-radius:4px;min-width:140px;">
+                {% for u in users %}
+                <option value="{{ u.user_id }}">{{ u.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label style="display:block;font-size:0.8rem;color:#666;margin-bottom:0.3rem;">참가 종류</label>
+            <select name="event_type" required style="padding:0.5rem;border:1px solid #ddd;border-radius:4px;">
+                {% for r in event_types %}
+                <option value="{{ r.key }}">{{ r.label }} (+{{ "{:,}".format(r.points) }}점)</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label style="display:block;font-size:0.8rem;color:#666;margin-bottom:0.3rem;">참가 날짜</label>
+            <input type="date" name="date" value="{{ today }}" style="padding:0.5rem;border:1px solid #ddd;border-radius:4px;">
+        </div>
+        <button type="submit" class="refresh-btn" style="padding:0.5rem 1.2rem;">등록</button>
+    </form>
+</div>
+{% endif %}
+
+<div class="card">
+    <h2>📋 등록된 참가 내역</h2>
+    <table class="resp">
+        <thead>
+            <tr>
+                <th>참가자</th>
+                <th>참가 항목</th>
+                <th>점수</th>
+                <th>참가 날짜</th>
+                <th>등록 일시</th>
+                {% if is_admin %}<th>작업</th>{% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% if events %}
+            {% for e in events %}
+            <tr>
+                <td data-label="참가자">{{ e.user_name }}</td>
+                <td data-label="참가 항목">{{ e.label }}</td>
+                <td data-label="점수"><span class="badge badge-primary">+{{ "{:,}".format(e.points) }}</span></td>
+                <td data-label="참가 날짜" style="white-space:nowrap;">{{ e.date }}</td>
+                <td data-label="등록 일시" style="white-space:nowrap;">{{ e.created_at }}</td>
+                {% if is_admin %}
+                <td data-label="작업">
+                    <form method="post" action="/manage/events/delete/{{ e.id }}"
+                          style="display:inline;" onsubmit="return confirm('이 참가 기록을 삭제할까요?');">
+                        <button type="submit" class="badge badge-warning" style="border:none;cursor:pointer;">🗑 삭제</button>
+                    </form>
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+            {% else %}
+            <tr><td colspan="{% if is_admin %}6{% else %}5{% endif %}" style="text-align:center;padding:2rem;color:#999;">등록된 참가 내역이 없습니다.</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+    {{ pg.bar('/manage/events', page, total_pages) }}
+</div>
+{% endblock %}

@@ -1,0 +1,9 @@
+{% macro bar(base, page, total_pages, extra='', param='page') %}
+{% if total_pages > 1 %}
+<div class="pagination">
+    {% if page > 1 %}<a href="{{ base }}?{{ param }}={{ page - 1 }}{{ extra }}">← 이전</a>{% endif %}
+    <span class="current">{{ page }} / {{ total_pages }}</span>
+    {% if page < total_pages %}<a href="{{ base }}?{{ param }}={{ page + 1 }}{{ extra }}">다음 →</a>{% endif %}
+</div>
+{% endif %}
+{% endmacro %}

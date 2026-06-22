@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>러닝 챗봇 (웹)</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#1a1a2e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="러닝">
+    <link rel="apple-touch-icon" href="/static/icon-192.png">
+    <script>if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js').catch(()=>{}); }</script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #b2c7d9; }
+        .app { max-width: 480px; margin: 0 auto; height: 100vh; display: flex; flex-direction: column; background: #b2c7d9; }
+        header { background: #1a1a2e; color: #fff; padding: 0.9rem 1rem; display:flex; justify-content:space-between; align-items:center; }
+        header h1 { font-size: 1rem; }
+        header .who { font-size: 0.8rem; color: #bbb; }
+        .chat { flex: 1; overflow-y: auto; padding: 1rem; transition: background 0.15s; }
+        .chat.drag { outline: 3px dashed #1a1a2e; outline-offset: -12px; background: #cfe0ef; }
+        .row { display: flex; margin-bottom: 0.7rem; }
+        .row.me { justify-content: flex-end; }
+        .bubble { max-width: 78%; padding: 0.6rem 0.8rem; border-radius: 14px; font-size: 0.9rem; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+        .bot .bubble { background: #fff; color: #222; border-top-left-radius: 4px; }
+        .me .bubble { background: #fee500; color: #3a2e00; border-top-right-radius: 4px; }
+        .bubble img { max-width: 100%; border-radius: 8px; display:block; }
+        .composer { background: #f5f5f5; padding: 0.6rem; display: flex; gap: 0.5rem; align-items: center; border-top: 1px solid #ddd; }
+        .composer input[type=text] { flex: 1; padding: 0.7rem; border: 1px solid #ccc; border-radius: 20px; font-size: 0.95rem; }
+        .composer button, .composer label { background: #1a1a2e; color: #fff; border: none; border-radius: 50%; width: 42px; height: 42px; font-size: 1.1rem; cursor: pointer; display:flex; align-items:center; justify-content:center; }
+        .composer button:disabled { opacity: 0.5; }
+        .gate { padding: 1.5rem; background:#fff; margin: 2rem 1rem; border-radius: 12px; }
+        .gate h2 { font-size: 1rem; margin-bottom: 1rem; color:#1a1a2e; }
+        .gate select, .gate input { width: 100%; padding: 0.7rem; border: 1px solid #ccc; border-radius: 8px; margin-bottom: 0.7rem; font-size: 1rem; }
+        .gate button { width: 100%; padding: 0.7rem; background:#1a1a2e; color:#fff; border:none; border-radius:8px; font-size:1rem; cursor:pointer; }
+        .or { text-align:center; color:#999; font-size:0.8rem; margin: 0.4rem 0; }
+        .hint { font-size:0.75rem; color:#888; padding: 0 0.2rem 0.6rem; }
+    </style>
+</head>
+<body>
+<div class="app">
+    <header>
+        <h1>🏃 러닝 챗봇</h1>
+        <span class="who" id="who"></span>
+    </header>
+
+    <!-- 사용자 선택 게이트 -->
+    <div id="gate" class="gate">
+        <h2>누구로 시작할까요?</h2>
+        <select id="userSelect">
+            <option value="">-- 기존 사용자 선택 --</option>
+            {% for u in users %}
+            <option value="{{ u.user_id }}" data-name="{{ u.name }}">{{ u.name }}</option>
+            {% endfor %}
+        </select>
+        <button onclick="startExisting()">이 사용자로 시작</button>
+        <div class="or">— 또는 —</div>
+        <input type="text" id="newName" placeholder="새 이름으로 시작 (예: 홍길동)">
+        <button onclick="startNew()">새 사용자로 시작</button>
+    </div>
+
+    <!-- 채팅 -->
+    <div class="chat" id="chat" style="display:none;"></div>
+    <div class="composer" id="composer" style="display:none;">
+        <label for="photo" title="사진 보내기">📷</label>
+        <input type="file" id="photo" accept="image/*" style="display:none;" onchange="sendPhoto()">
+        <input type="text" id="text" placeholder="메시지 입력 (점수/기록/순위/공지...)" onkeydown="if(event.key==='Enter')sendText()">
+        <button id="sendBtn" onclick="sendText()">➤</button>
+    </div>
+</div>
+
+<script>
+let USER_ID = null, USER_NAME = null;
+
+// 쿠키에 저장된 '나'가 있으면 선택 화면 없이 바로 채팅
+const ME_UID = {{ me | tojson }};
+const ME_NAME = {{ me_name | tojson }};
+
+function startExisting() {
+    const sel = document.getElementById('userSelect');
+    if (!sel.value) { alert('사용자를 선택하세요.'); return; }
+    // 쿠키에 '나'로 저장 후 채팅으로 (다음부터 자동 입장)
+    location.href = '/whoami?next=/chat&uid=' + encodeURIComponent(sel.value);
+}
+async function startNew() {
+    const name = document.getElementById('newName').value.trim();
+    if (!name) { alert('이름을 입력하세요.'); return; }
+    const fd = new FormData(); fd.append('name', name);
+    const r = await fetch('/api/web_user', { method: 'POST', body: fd });
+    const d = await r.json();
+    if (d.error) { alert(d.error); return; }
+    // /api/web_user 가 쿠키도 설정함 → 새로고침하면 자동 입장
+    location.reload();
+}
+function enterChat() {
+    document.getElementById('gate').style.display = 'none';
+    document.getElementById('chat').style.display = 'block';
+    document.getElementById('composer').style.display = 'flex';
+    document.getElementById('who').textContent = USER_NAME + '님';
+    addBubble('bot', '안녕하세요 ' + USER_NAME + '님! 🏃\n러닝 사진을 보내면 기록을 분석해 드려요.\n📷 버튼을 누르거나 사진을 이 창에 끌어다 놓아도 됩니다.\n"점수", "기록", "순위", "공지" 도 입력해 보세요!');
+}
+function addBubble(who, text, imgSrc) {
+    const chat = document.getElementById('chat');
+    const row = document.createElement('div');
+    row.className = 'row ' + who;
+    const b = document.createElement('div');
+    b.className = 'bubble';
+    if (imgSrc) { const im = document.createElement('img'); im.src = imgSrc; b.appendChild(im); }
+    if (text) { const t = document.createElement('div'); t.textContent = text; b.appendChild(t); }
+    row.appendChild(b); chat.appendChild(row);
+    chat.scrollTop = chat.scrollHeight;
+}
+async function post(fd) {
+    fd.append('user_id', USER_ID);
+    const btn = document.getElementById('sendBtn'); btn.disabled = true;
+    addBubble('bot', '⏳ 분석 중...');
+    const placeholder = document.querySelector('#chat .row.bot:last-child');
+    try {
+        const r = await fetch('/api/chat', { method: 'POST', body: fd });
+        const d = await r.json();
+        placeholder.remove();
+        addBubble('bot', d.reply || '(응답 없음)');
+    } catch (e) {
+        placeholder.remove();
+        addBubble('bot', '⚠️ 통신 오류가 발생했습니다.');
+    }
+    btn.disabled = false;
+}
+function sendText() {
+    const inp = document.getElementById('text');
+    const msg = inp.value.trim();
+    if (!msg) return;
+    addBubble('me', msg);
+    inp.value = '';
+    const fd = new FormData(); fd.append('message', msg);
+    post(fd);
+}
+function sendImageFile(f) {
+    if (!f) return;
+    if (!f.type || !f.type.startsWith('image/')) { alert('이미지 파일만 올릴 수 있어요.'); return; }
+    addBubble('me', null, URL.createObjectURL(f));
+    const fd = new FormData(); fd.append('image', f);
+    post(fd);
+}
+function sendPhoto() {
+    sendImageFile(document.getElementById('photo').files[0]);
+    document.getElementById('photo').value = '';
+}
+
+// 드래그앤드롭 업로드
+const _app = document.querySelector('.app');
+['dragenter', 'dragover'].forEach(ev => _app.addEventListener(ev, e => {
+    if (!USER_ID) return;
+    e.preventDefault(); e.stopPropagation();
+    document.getElementById('chat').classList.add('drag');
+}));
+['dragleave', 'drop'].forEach(ev => _app.addEventListener(ev, e => {
+    e.preventDefault(); e.stopPropagation();
+    const chat = document.getElementById('chat');
+    // dragleave 가 자식요소 이동 시에도 발생하므로 app 밖으로 나갈 때만 해제
+    if (ev === 'drop' || !_app.contains(e.relatedTarget)) chat.classList.remove('drag');
+}));
+_app.addEventListener('drop', e => {
+    if (!USER_ID) { alert('먼저 사용자를 선택해 주세요.'); return; }
+    const f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) sendImageFile(f);
+});
+
+// 저장된 '나'가 있으면 선택 화면 건너뛰고 바로 입장
+if (ME_UID) { USER_ID = ME_UID; USER_NAME = ME_NAME; enterChat(); }
+</script>
+</body>
+</html>

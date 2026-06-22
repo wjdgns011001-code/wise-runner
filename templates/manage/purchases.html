@@ -1,0 +1,77 @@
+{% extends "manage/base.html" %}
+{% import "manage/_pagination.html" as pg %}
+{% block content %}
+<div class="card">
+    <div class="flex">
+        <h2>🛍️ 물품 구매 내역</h2>
+        <div style="display:flex;align-items:center;gap:1rem;">
+            <span style="font-size:0.85rem;color:#888;">신청 대기 {{ pending_cnt }}건 · 누적 {{ "{:,}".format(total_spent) }}점 차감</span>
+            {% if is_admin %}
+            <span class="badge badge-success">관리자</span>
+            <a href="/manage/logout" style="font-size:0.85rem;color:#888;text-decoration:none;">로그아웃</a>
+            {% else %}
+            <a href="/manage/login?next=/manage/purchases" class="refresh-btn">🔐 관리자 로그인</a>
+            {% endif %}
+        </div>
+    </div>
+    {% if msg %}
+    <p style="margin-top:0.8rem;color:#2e7d32;font-size:0.9rem;">✅ {{ msg }}</p>
+    {% endif %}
+    {% if not is_admin %}
+    <p style="margin-top:0.6rem;font-size:0.85rem;color:#888;">구매 완료/취소는 관리자 로그인 후 가능합니다.</p>
+    {% else %}
+    <p style="margin-top:0.6rem;font-size:0.85rem;color:#888;">신청 건은 <strong>구매 완료</strong>를 눌러야 포인트가 차감됩니다.</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <table class="resp">
+        <thead>
+            <tr>
+                <th>구매자</th>
+                <th>상품</th>
+                <th>차감 점수</th>
+                <th>상태</th>
+                <th>신청 일시</th>
+                {% if is_admin %}<th>작업</th>{% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% if purchases %}
+            {% for p in purchases %}
+            <tr>
+                <td data-label="구매자">{{ p.user_name }}</td>
+                <td data-label="상품">{{ p.item }}</td>
+                <td data-label="차감 점수"><span class="badge badge-warning">-{{ "{:,}".format(p.cost) }}</span></td>
+                <td data-label="상태">
+                    {% if p.status == 'completed' %}
+                        <span class="badge badge-success">구매완료</span>
+                    {% else %}
+                        <span class="badge badge-warning">신청대기</span>
+                    {% endif %}
+                </td>
+                <td data-label="신청 일시" style="white-space:nowrap;">{{ p.created_at }}</td>
+                {% if is_admin %}
+                <td data-label="작업" style="white-space:nowrap;">
+                    {% if p.status != 'completed' %}
+                    <form method="post" action="/manage/purchases/complete/{{ p.id }}"
+                          style="display:inline;" onsubmit="return confirm('구매 완료 처리할까요? {{ '{:,}'.format(p.cost) }}점이 차감됩니다.');">
+                        <button type="submit" class="badge badge-primary" style="border:none;cursor:pointer;">✅ 구매 완료</button>
+                    </form>
+                    {% endif %}
+                    <form method="post" action="/manage/purchases/cancel/{{ p.id }}"
+                          style="display:inline;" onsubmit="return confirm('이 구매를 취소할까요? (완료 건은 점수가 환원됩니다)');">
+                        <button type="submit" class="badge" style="border:none;cursor:pointer;background:#ffebee;color:#c62828;">↩ 취소</button>
+                    </form>
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+            {% else %}
+            <tr><td colspan="{% if is_admin %}6{% else %}5{% endif %}" style="text-align:center;padding:2rem;color:#999;">구매 내역이 없습니다.</td></tr>
+            {% endif %}
+        </tbody>
+    </table>
+    {{ pg.bar('/manage/purchases', page, total_pages) }}
+</div>
+{% endblock %}

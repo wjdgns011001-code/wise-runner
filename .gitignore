@@ -1,0 +1,14 @@
+# 파이썬
+*.pyc
+__pycache__/
+.venv/
+venv/
+
+# 런타임 데이터 (기록/구매/좋아요/업로드 등)
+data/
+
+# 로그
+*.log
+
+# 비밀정보 (API 토큰, 관리자 비번) — 예시는 config.yaml.example 사용
+config.yaml

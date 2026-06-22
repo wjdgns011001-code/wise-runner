@@ -1,0 +1,14 @@
+# config.yaml 예시 — 복사해서 config.yaml 로 저장한 뒤 값을 채우세요.
+#   cp config.yaml.example config.yaml
+# config.yaml 에는 API 토큰/비밀번호가 들어가므로 git 에 올리지 않습니다(.gitignore 처리됨).
+
+connect:
+  # 러닝 기록 사진을 분석할 비전(VL) 모델 서버 (OpenAI 호환 /v1/chat/completions)
+  ip: "127.0.0.1"
+  port: 8080
+  model_name: "your-vision-model"
+  api_token: "YOUR_API_TOKEN"   # 토큰이 없으면 null
+
+admin:
+  # 관리도구에서 삭제/구매완료/공지작성 등 관리자 전용 기능에 쓰는 비밀번호
+  password: "change-me"

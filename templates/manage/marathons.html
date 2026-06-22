@@ -1,0 +1,82 @@
+{% extends "manage/base.html" %}
+{% import "manage/_pagination.html" as pg %}
+{% block content %}
+<div class="card">
+    <div class="flex">
+        <h2>🏅 전국 마라톤 대회 일정</h2>
+        <div style="display:flex;align-items:center;gap:1rem;">
+            <span style="font-size:0.8rem;color:#888;">마지막 갱신: {{ updated or '-' }} · 표시 {{ shown_count }}건 / 전체 {{ total_count }}건</span>
+            <a href="/manage/marathons?refresh=1&sort={{ sort }}{% if region %}&region={{ region }}{% endif %}" class="refresh-btn">🔄 지금 갱신</a>
+        </div>
+    </div>
+
+    {% set qregion = '&region=' + region if region else '' %}
+    <div style="margin-top:0.9rem;display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+        <span style="font-size:0.78rem;color:#999;">지역</span>
+        <a href="/manage/marathons?sort={{ sort }}"
+           class="badge {% if region != 'metro' %}badge-primary{% endif %}"
+           style="text-decoration:none;padding:0.35rem 0.9rem;{% if region == 'metro' %}background:#f0f0f0;color:#777;{% endif %}">전국 전체</a>
+        <a href="/manage/marathons?region=metro&sort={{ sort }}"
+           class="badge {% if region == 'metro' %}badge-primary{% endif %}"
+           style="text-decoration:none;padding:0.35rem 0.9rem;{% if region != 'metro' %}background:#f0f0f0;color:#777;{% endif %}">서울 · 경기</a>
+    </div>
+
+    <div style="margin-top:0.5rem;display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+        <span style="font-size:0.78rem;color:#999;">정렬</span>
+        <a href="/manage/marathons?sort={{ 'dday_desc' if sort == 'dday_asc' else 'dday_asc' }}{{ qregion }}"
+           class="badge {% if sort.startswith('dday') %}badge-primary{% endif %}"
+           style="text-decoration:none;padding:0.35rem 0.9rem;{% if not sort.startswith('dday') %}background:#f0f0f0;color:#777;{% endif %}">
+           D-day {% if sort == 'dday_asc' %}▲{% elif sort == 'dday_desc' %}▼{% else %}⇅{% endif %}</a>
+        <a href="/manage/marathons?sort={{ 'status_desc' if sort == 'status_asc' else 'status_asc' }}{{ qregion }}"
+           class="badge {% if sort.startswith('status') %}badge-primary{% endif %}"
+           style="text-decoration:none;padding:0.35rem 0.9rem;{% if not sort.startswith('status') %}background:#f0f0f0;color:#777;{% endif %}">
+           접수상태 {% if sort == 'status_asc' %}▲{% elif sort == 'status_desc' %}▼{% else %}⇅{% endif %}</a>
+    </div>
+
+    {% if error %}
+    <p style="margin-top:0.8rem;color:#c62828;font-size:0.85rem;">⚠️ {{ error }}</p>
+    {% endif %}
+</div>
+
+<style>
+    .mara-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap:0.8rem; }
+    .mara-card { border:1px solid #ececf0; border-radius:12px; padding:0.9rem 1rem; background:#fff; }
+    .mara-head { display:flex; justify-content:space-between; align-items:flex-start; gap:0.6rem; }
+    .mara-name { font-weight:700; font-size:1rem; line-height:1.35; word-break:keep-all; }
+    .mara-name a { color:#1565c0; text-decoration:none; }
+    .mara-row { font-size:0.86rem; color:#555; margin-top:0.45rem; display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap; }
+    .mara-row .ic { width:1.1rem; }
+    .mara-dim { color:#aaa; font-size:0.92em; }
+</style>
+
+<div class="card">
+    {% if events %}
+    <div class="mara-grid">
+        {% for e in events %}
+        <div class="mara-card">
+            <div class="mara-head">
+                <div class="mara-name">
+                    {% if e.homepage %}
+                    <a href="{{ e.homepage }}" target="_blank" rel="noopener">{{ e.name }} ↗</a>
+                    {% else %}{{ e.name }}{% endif %}
+                </div>
+                <span class="badge badge-primary" style="white-space:nowrap;">{{ e.dday }}</span>
+            </div>
+            <div class="mara-row"><span class="ic">📅</span> <strong>{{ e.date }}</strong>{% if e.when %} <span class="mara-dim">{{ e.when }}</span>{% endif %}</div>
+            <div class="mara-row"><span class="ic">📍</span> {{ e.place or '-' }}</div>
+            <div class="mara-row">
+                <span class="ic">🗓️</span>
+                {% if e.reg_start or e.reg_end %}{{ e.reg_start or '?' }} ~ {{ e.reg_end or '?' }}{% else %}<span class="mara-dim">접수정보 없음</span>{% endif %}
+                {% if e.reg_status == '접수중' %}<span class="badge badge-success">접수중</span>
+                {% elif e.reg_status == '접수예정' %}<span class="badge badge-warning">접수예정</span>
+                {% elif e.reg_status == '접수마감' %}<span class="badge" style="background:#f0f0f0;color:#999;">접수마감</span>{% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div style="text-align:center;padding:2rem;color:#999;">표시할 대회가 없습니다. '지금 갱신'을 눌러보세요.</div>
+    {% endif %}
+    {{ pg.bar('/manage/marathons', page, total_pages, page_extra) }}
+</div>
+{% endblock %}
