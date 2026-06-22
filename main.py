@@ -27,6 +27,7 @@ from utils import notice
 from utils import rewards
 from utils import social
 from utils import push
+from utils import meeting
 from utils.score import Score
 
 
@@ -772,6 +773,108 @@ async def manage_notices_delete(request: Request, notice_id: str):
     ok = notice.delete_notice(notice_id)
     msg = "공지가+삭제되었습니다" if ok else "삭제할+공지를+찾을+수+없습니다"
     return RedirectResponse(url=f"/manage/notices?msg={msg}", status_code=303)
+
+
+# ──────────────── 동호회 정기모임 ────────────────
+
+@app.get("/manage/meetings", response_class=HTMLResponse)
+async def manage_meetings(request: Request, msg: str = "", page: int = 1):
+    """정기모임: 모임글 목록 + 참석 + 단체사진. '나'는 쿠키로 식별."""
+    me = get_me(request)
+    me_user = next((u for u in _registered_users() if u["user_id"] == me), None)
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    raw, page, total_pages = _paginate(meeting.list_meetings(), page, per_page=10)
+    meetings = []
+    for m in raw:
+        att = m.get("attendees", [])
+        meetings.append({
+            "id": m["id"],
+            "title": m["title"],
+            "date": m["date"],
+            "place": m.get("place", ""),
+            "content": m.get("content", ""),
+            "author_name": get_user_name(m.get("author_id")) or "익명",
+            "attendee_names": [get_user_name(u) or "익명" for u in att],
+            "attend_count": len(att),
+            "attending": bool(me) and me in att,
+            "photos": ["/meeting/photo/" + fn for fn in m.get("photos", [])],
+            "can_photo": bool(me) and today >= m["date"],
+            "can_delete": bool(me) and (me == m.get("author_id") or is_admin(request)),
+        })
+    html = render_template(
+        "manage/meetings.html",
+        active="meetings", meetings=meetings, me=me, me_user=me_user,
+        users=_registered_users(), today=today, msg=msg,
+        page=page, total_pages=total_pages,
+    )
+    return HTMLResponse(content=html)
+
+
+@app.post("/manage/meetings/add")
+async def manage_meetings_add(request: Request, title: str = Form(...), date: str = Form(...),
+                              place: str = Form(""), content: str = Form("")):
+    me = get_me(request)
+    if not me:
+        return RedirectResponse(url="/whoami?next=/manage/meetings", status_code=303)
+    if not date:
+        return RedirectResponse(url="/manage/meetings?msg=날짜는+필수입니다", status_code=303)
+    m = meeting.add_meeting(me, title, date, place, content)
+    # 새 모임 → 전체 알림
+    push.notify(
+        push.subscribed_user_ids(),
+        "📅 새 정기모임",
+        f"{m['date']} {m['title']}" + (f" @ {m['place']}" if m['place'] else ""),
+        url="/manage/meetings",
+    )
+    return RedirectResponse(url="/manage/meetings?msg=모임글이+등록되었습니다", status_code=303)
+
+
+@app.post("/manage/meetings/attend")
+async def manage_meetings_attend(request: Request, mid: str = Form(...)):
+    me = get_me(request)
+    if not me:
+        return RedirectResponse(url="/whoami?next=/manage/meetings", status_code=303)
+    meeting.toggle_attend(mid, me)
+    return RedirectResponse(url="/manage/meetings", status_code=303)
+
+
+@app.post("/manage/meetings/photo/{mid}")
+async def manage_meetings_photo(request: Request, mid: str, file: UploadFile = File(...)):
+    me = get_me(request)
+    if not me:
+        return RedirectResponse(url="/whoami?next=/manage/meetings", status_code=303)
+    m = meeting.get_meeting(mid)
+    if not m:
+        return RedirectResponse(url="/manage/meetings?msg=모임을+찾을+수+없습니다", status_code=303)
+    if datetime.now().strftime("%Y-%m-%d") < m["date"]:
+        return RedirectResponse(url="/manage/meetings?msg=모임+당일부터+사진을+올릴+수+있어요", status_code=303)
+    content = await file.read()
+    if content:
+        meeting.save_photo(mid, file.filename, content)
+        return RedirectResponse(url="/manage/meetings?msg=사진이+업로드되었습니다", status_code=303)
+    return RedirectResponse(url="/manage/meetings?msg=빈+파일", status_code=303)
+
+
+@app.post("/manage/meetings/delete/{mid}")
+async def manage_meetings_delete(request: Request, mid: str):
+    me = get_me(request)
+    m = meeting.get_meeting(mid)
+    if not m:
+        return RedirectResponse(url="/manage/meetings?msg=모임을+찾을+수+없습니다", status_code=303)
+    # 작성자 본인 또는 관리자만 삭제
+    if not (me and (me == m.get("author_id") or is_admin(request))):
+        return RedirectResponse(url="/manage/meetings?msg=작성자+또는+관리자만+삭제할+수+있어요", status_code=303)
+    meeting.delete_meeting(mid)
+    return RedirectResponse(url="/manage/meetings?msg=모임글이+삭제되었습니다", status_code=303)
+
+
+@app.get("/meeting/photo/{name}")
+async def meeting_photo(name: str):
+    p = meeting.photo_path(name)
+    if not p:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return FileResponse(p)
 
 
 @app.get("/manage/events", response_class=HTMLResponse)

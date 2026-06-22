@@ -1,0 +1,117 @@
+{% extends "manage/base.html" %}
+{% import "manage/_pagination.html" as pg %}
+{% block content %}
+<style>
+    .mt-card { border:1px solid #ececf0; border-radius:12px; padding:1rem 1.1rem; margin-bottom:1rem; background:#fff; }
+    .mt-top { display:flex; justify-content:space-between; align-items:flex-start; gap:0.6rem; }
+    .mt-title { font-weight:700; font-size:1.05rem; }
+    .mt-meta { font-size:0.86rem; color:#555; margin-top:0.4rem; line-height:1.7; }
+    .mt-content { font-size:0.9rem; color:#444; margin-top:0.5rem; white-space:pre-wrap; }
+    .mt-att { margin-top:0.7rem; font-size:0.85rem; color:#555; }
+    .mt-att .names { color:#888; }
+    .mt-photos { display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:0.7rem; }
+    .mt-photos img { width:110px; height:110px; object-fit:cover; border-radius:8px; border:1px solid #eee; }
+    .mt-actions { display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; margin-top:0.8rem; }
+    .btn-att { border:none; cursor:pointer; border-radius:18px; padding:0.45rem 1rem; font-size:0.9rem; }
+    .btn-att.on { background:#e8f5e9; color:#2e7d32; }
+    .btn-att.off { background:#1a1a2e; color:#fff; }
+</style>
+
+<div class="card">
+    <div class="flex">
+        <h2>📅 동호회 정기모임</h2>
+        <div style="display:flex;align-items:center;gap:0.5rem;">
+            {% if me_user %}
+            <span style="font-size:0.85rem;">나: <strong>{{ me_user.name }}</strong></span>
+            <a href="/whoami/clear?next=/manage/meetings" style="font-size:0.8rem;color:#888;">변경</a>
+            {% else %}
+            <span style="font-size:0.82rem;color:#888;">나:</span>
+            <select onchange="if(this.value)location.href='/whoami?next=/manage/meetings&uid='+encodeURIComponent(this.value)" style="padding:0.4rem 0.6rem;border:1px solid #ddd;border-radius:6px;">
+                <option value="">선택</option>
+                {% for u in users %}<option value="{{ u.user_id }}">{{ u.name }}</option>{% endfor %}
+            </select>
+            {% endif %}
+        </div>
+    </div>
+    {% if msg %}<p style="margin-top:0.7rem;color:#2e7d32;font-size:0.9rem;">✅ {{ msg }}</p>{% endif %}
+    {% if not me_user %}
+    <p style="margin-top:0.6rem;font-size:0.85rem;color:#888;">모임글 작성·참석·사진 업로드를 하려면 위에서 본인 이름을 선택하세요.</p>
+    {% endif %}
+</div>
+
+{% if me_user %}
+<div class="card">
+    <h2>✍️ 모임글 올리기</h2>
+    <form method="post" action="/manage/meetings/add" style="display:flex;flex-direction:column;gap:0.6rem;">
+        <input type="text" name="title" placeholder="모임 제목 (예: 6월 정기런)" required
+               style="padding:0.6rem;border:1px solid #ddd;border-radius:6px;">
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <input type="date" name="date" required value="{{ today }}"
+                   style="padding:0.6rem;border:1px solid #ddd;border-radius:6px;">
+            <input type="text" name="place" placeholder="장소 (선택)"
+                   style="flex:1;min-width:140px;padding:0.6rem;border:1px solid #ddd;border-radius:6px;">
+        </div>
+        <textarea name="content" placeholder="내용 (선택)" rows="3"
+                  style="padding:0.6rem;border:1px solid #ddd;border-radius:6px;font-family:inherit;resize:vertical;"></textarea>
+        <button type="submit" class="refresh-btn" style="align-self:flex-start;">모임 등록 (전체 알림)</button>
+    </form>
+</div>
+{% endif %}
+
+<div class="card">
+    <h2>📋 모임 목록</h2>
+    {% if meetings %}
+    {% for m in meetings %}
+    <div class="mt-card">
+        <div class="mt-top">
+            <div>
+                <div class="mt-title">{{ m.title }}
+                    {% if m.date >= today %}<span class="badge badge-warning" style="font-size:0.7rem;">예정</span>
+                    {% else %}<span class="badge" style="background:#f0f0f0;color:#999;font-size:0.7rem;">종료</span>{% endif %}
+                </div>
+                <div class="mt-meta">📅 {{ m.date }}{% if m.place %} · 📍 {{ m.place }}{% endif %}<br>✍️ {{ m.author_name }}</div>
+            </div>
+            {% if m.can_delete %}
+            <form method="post" action="/manage/meetings/delete/{{ m.id }}" onsubmit="return confirm('이 모임글을 삭제할까요?');">
+                <button type="submit" class="badge" style="border:none;cursor:pointer;background:#ffebee;color:#c62828;">🗑</button>
+            </form>
+            {% endif %}
+        </div>
+
+        {% if m.content %}<div class="mt-content">{{ m.content }}</div>{% endif %}
+
+        <div class="mt-att">
+            🙋 참석 <strong>{{ m.attend_count }}명</strong>
+            {% if m.attendee_names %}<span class="names">— {{ m.attendee_names | join(', ') }}</span>{% endif %}
+        </div>
+
+        {% if m.photos %}
+        <div class="mt-photos">
+            {% for p in m.photos %}<a href="{{ p }}" target="_blank"><img src="{{ p }}"></a>{% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="mt-actions">
+            {% if me_user %}
+            <form method="post" action="/manage/meetings/attend">
+                <input type="hidden" name="mid" value="{{ m.id }}">
+                <button type="submit" class="btn-att {% if m.attending %}on{% else %}off{% endif %}">
+                    {% if m.attending %}✅ 참석 취소{% else %}🙋 참석{% endif %}
+                </button>
+            </form>
+            {% endif %}
+            {% if m.can_photo %}
+            <form method="post" action="/manage/meetings/photo/{{ m.id }}" enctype="multipart/form-data" style="display:flex;gap:0.4rem;align-items:center;">
+                <input type="file" name="file" accept="image/*" required style="font-size:0.8rem;max-width:170px;">
+                <button type="submit" class="badge badge-primary" style="border:none;cursor:pointer;">📷 단체사진 올리기</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div style="text-align:center;color:#999;padding:2rem;">아직 등록된 모임이 없습니다.</div>
+    {% endif %}
+    {{ pg.bar('/manage/meetings', page, total_pages) }}
+</div>
+{% endblock %}
