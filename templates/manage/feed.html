@@ -23,6 +23,7 @@
         <h2>📣 러닝 피드</h2>
         <div style="display:flex;align-items:center;gap:0.5rem;">
             {% if me_user %}
+            <button id="pushBtn" onclick="enablePush()" class="badge badge-primary" style="border:none;cursor:pointer;display:none;">🔔 알림 받기</button>
             <span style="font-size:0.85rem;">나: <strong>{{ me_user.name }}</strong></span>
             <a href="/whoami/clear?next=/manage" style="font-size:0.8rem;color:#888;">변경</a>
             {% else %}
@@ -86,5 +87,44 @@
         setTimeout(() => t.classList.remove('show'), 6000);
     });
     {% endif %}
+
+    // ── 웹 푸시 알림 ──
+    function _b64ToU8(b64) {
+        const pad = '='.repeat((4 - b64.length % 4) % 4);
+        const s = (b64 + pad).replace(/-/g, '+').replace(/_/g, '/');
+        const raw = atob(s);
+        return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+    }
+    async function _pushState() {
+        const btn = document.getElementById('pushBtn');
+        if (!btn || !MY_UID || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+        try {
+            const reg = await navigator.serviceWorker.ready;
+            const sub = await reg.pushManager.getSubscription();
+            if (sub) { btn.textContent = '🔔 알림 켜짐'; btn.style.opacity = '0.6'; }
+            btn.style.display = 'inline-block';
+        } catch (e) {}
+    }
+    async function enablePush() {
+        if (!MY_UID) { alert('먼저 본인 이름을 선택하세요'); return; }
+        try {
+            const perm = await Notification.requestPermission();
+            if (perm !== 'granted') { alert('알림이 차단되어 있어요. 설정에서 허용해 주세요.'); return; }
+            const { publicKey } = await (await fetch('/api/push/vapid')).json();
+            const reg = await navigator.serviceWorker.ready;
+            const sub = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: _b64ToU8(publicKey),
+            });
+            await fetch('/api/push/subscribe', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ uid: MY_UID, subscription: sub.toJSON() }),
+            });
+            const btn = document.getElementById('pushBtn');
+            btn.textContent = '🔔 알림 켜짐'; btn.style.opacity = '0.6';
+            alert('알림이 켜졌어요! 새 기록·좋아요 알림을 받습니다 🔔');
+        } catch (e) { alert('알림 설정에 실패했어요: ' + e.message); }
+    }
+    window.addEventListener('load', _pushState);
 </script>
 {% endblock %}

@@ -140,6 +140,34 @@ class Database:
             weeks[(y, w)][1] += Score.parse_minutes(r.total_time)
         return sum(Score.weekly_bonus(km, mins) for km, mins in weeks.values())
 
+    def get_recent_stats(self, user_id: str) -> dict:
+        """이번 주(ISO week) / 이번 달 누적 거리·시간·횟수."""
+        now = datetime.now()
+        cy, cw, _ = now.isocalendar()
+        ym = (now.year, now.month)
+        week = {"distance": 0.0, "minutes": 0.0, "runs": 0}
+        month = {"distance": 0.0, "minutes": 0.0, "runs": 0}
+        for r in self.get_user_records(user_id):
+            try:
+                d = datetime.strptime(r.date, "%Y-%m-%d")
+            except Exception:
+                continue
+            dist = r.total_distance or 0
+            mins = Score.parse_minutes(r.total_time)
+            y, w, _ = d.isocalendar()
+            if (y, w) == (cy, cw):
+                week["distance"] += dist; week["minutes"] += mins; week["runs"] += 1
+            if (d.year, d.month) == ym:
+                month["distance"] += dist; month["minutes"] += mins; month["runs"] += 1
+
+        def _fmt(p):
+            m = int(p["minutes"])
+            p["distance"] = round(p["distance"], 2)
+            p["time_str"] = f"{m // 60}시간 {m % 60}분" if m >= 60 else f"{m}분"
+            return p
+
+        return {"week": _fmt(week), "month": _fmt(month), "month_label": f"{now.month}월"}
+
     def get_week_progress(self, user_id: str):
         """이번 주(ISO week) 누적 거리(km)와 시간(분) 반환."""
         now = datetime.now()

@@ -21,6 +21,37 @@
     </div>
 </div>
 
+<!-- 이번주 / 이번달 -->
+<div class="card">
+    <h2>📆 최근 기록</h2>
+    <div class="stat-grid">
+        <div class="stat-item" style="background:#eef4fb;">
+            <div class="value">{{ recent.week.distance }} km</div>
+            <div class="label">이번주 거리</div>
+        </div>
+        <div class="stat-item" style="background:#eef4fb;">
+            <div class="value">{{ recent.week.time_str }}</div>
+            <div class="label">이번주 시간</div>
+        </div>
+        <div class="stat-item" style="background:#eef4fb;">
+            <div class="value">{{ recent.week.runs }}회</div>
+            <div class="label">이번주 횟수</div>
+        </div>
+        <div class="stat-item" style="background:#fdf4ec;">
+            <div class="value">{{ recent.month.distance }} km</div>
+            <div class="label">{{ recent.month_label }} 거리</div>
+        </div>
+        <div class="stat-item" style="background:#fdf4ec;">
+            <div class="value">{{ recent.month.time_str }}</div>
+            <div class="label">{{ recent.month_label }} 시간</div>
+        </div>
+        <div class="stat-item" style="background:#fdf4ec;">
+            <div class="value">{{ recent.month.runs }}회</div>
+            <div class="label">{{ recent.month_label }} 횟수</div>
+        </div>
+    </div>
+</div>
+
 <!-- 점수 요약 -->
 <div class="card">
     <h2>💰 점수 요약</h2>

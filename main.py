@@ -26,6 +26,7 @@ from utils import filestore
 from utils import notice
 from utils import rewards
 from utils import social
+from utils import push
 from utils.score import Score
 
 
@@ -327,6 +328,16 @@ async def handle_interaction(user_id: str, utterance: str = "", image_url: str =
                         f"🎁 획득 점수: {record.score}점\n"
                     )
                     _, days_diff, is_first = db_handler.upsert(record)
+
+                    # 기록 올린 사람을 제외한 나머지 구독자에게 피드 알림
+                    others = [u for u in push.subscribed_user_ids() if u != user_id]
+                    push.notify(
+                        others,
+                        "🏃 새 러닝 기록",
+                        f"{get_user_name(user_id) or '누군가'}님이 {record.total_distance}km 기록을 올렸어요!",
+                        url="/manage",
+                    )
+
                     if is_first:
                         msg += "🎉 달리기 시작한 첫날 기록을 축하드립니다!"
                     elif days_diff == 0:
@@ -469,6 +480,7 @@ async def manage_user_detail(request: Request, user_id: str, page: int = 1, wpag
     """개별 사용자 상세: 통계 + 점수 획득 내역(데일리/주간/참가/구매)"""
     stats = db_handler.get_user_stats(user_id)
     breakdown = db_handler.get_points_breakdown(user_id)
+    recent = db_handler.get_recent_stats(user_id)
     all_records = db_handler.get_user_records(user_id)  # 최신순 Record 리스트
     all_weekly = [w for w in db_handler.get_weekly_breakdown(all_records) if w["bonus"] > 0]
     events = rewards.list_events(user_id)
@@ -485,6 +497,7 @@ async def manage_user_detail(request: Request, user_id: str, page: int = 1, wpag
         user_name=get_user_name(user_id) or "(이름 미등록)",
         stats=stats,
         breakdown=breakdown,
+        recent=recent,
         records=records,
         record_count=record_count,
         weekly=weekly,
@@ -740,7 +753,14 @@ async def manage_notices_add(request: Request, title: str = Form(...), content: 
     """공지 작성 (관리자 전용)"""
     if not is_admin(request):
         return RedirectResponse(url="/manage/login?error=관리자만+공지를+작성할+수+있습니다", status_code=303)
-    notice.add_notice(title, content)
+    meta = notice.add_notice(title, content)
+    # 새 공지 → 전체 구독자에게 알림
+    push.notify(
+        push.subscribed_user_ids(),
+        "📢 새 공지사항",
+        meta.get("title", "공지가 등록되었습니다"),
+        url="/manage/notices",
+    )
     return RedirectResponse(url="/manage/notices?msg=공지가+등록되었습니다", status_code=303)
 
 
@@ -912,9 +932,38 @@ def _build_encourage(km, mins, cur_bonus, dist_goal, time_goal) -> str:
 
 @app.post("/api/like")
 async def api_like(uid: str = Form(...), key: str = Form(...)):
-    """러닝 피드 좋아요 토글."""
+    """러닝 피드 좋아요 토글. 새로 좋아요면 기록 주인에게 알림."""
     liked, count = social.toggle_like(key, uid)
+    if liked:
+        owner = (key.split("|", 1)[0]) if key else ""
+        if owner and owner != uid:
+            push.notify(
+                [owner],
+                "❤️ 좋아요",
+                f"{get_user_name(uid) or '누군가'}님이 회원님 기록에 좋아요를 눌렀어요!",
+                url="/manage",
+            )
     return JSONResponse({"liked": liked, "count": count})
+
+
+# ──────────────── 웹 푸시 알림 ────────────────
+
+@app.get("/api/push/vapid")
+async def push_vapid():
+    """브라우저 구독에 필요한 VAPID 공개키."""
+    return JSONResponse({"publicKey": push.public_key()})
+
+
+@app.post("/api/push/subscribe")
+async def push_subscribe(request: Request):
+    """기기 푸시 구독 등록. body: {uid, subscription}"""
+    body = await request.json()
+    uid = body.get("uid")
+    sub = body.get("subscription")
+    if not uid or not sub:
+        return JSONResponse({"ok": False, "error": "uid/subscription 필요"}, status_code=400)
+    push.add_subscription(uid, sub)
+    return JSONResponse({"ok": True})
 
 
 @app.post("/portal/buy")
@@ -954,12 +1003,32 @@ async def pwa_manifest():
 
 @app.get("/sw.js")
 async def pwa_service_worker():
-    # 최소 서비스워커: 설치 가능 조건 충족용(fetch 핸들러 존재). 데이터는 항상 서버와 통신.
-    sw = (
-        "self.addEventListener('install', e => self.skipWaiting());\n"
-        "self.addEventListener('activate', e => self.clients.claim());\n"
-        "self.addEventListener('fetch', e => {});\n"
-    )
+    sw = """
+self.addEventListener('install', e => self.skipWaiting());
+self.addEventListener('activate', e => self.clients.claim());
+self.addEventListener('fetch', e => {});
+
+self.addEventListener('push', function (e) {
+    let d = {};
+    try { d = e.data.json(); } catch (_) {}
+    const title = d.title || '와이즈러너스';
+    e.waitUntil(self.registration.showNotification(title, {
+        body: d.body || '',
+        icon: '/static/icon-192.png',
+        badge: '/static/icon-192.png',
+        data: { url: d.url || '/manage' }
+    }));
+});
+
+self.addEventListener('notificationclick', function (e) {
+    e.notification.close();
+    const url = (e.notification.data && e.notification.data.url) || '/manage';
+    e.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (wins) {
+        for (const w of wins) { if ('focus' in w) { w.navigate && w.navigate(url); return w.focus(); } }
+        if (clients.openWindow) return clients.openWindow(url);
+    }));
+});
+"""
     return Response(content=sw, media_type="application/javascript")
 
 
