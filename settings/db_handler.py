@@ -1,6 +1,7 @@
 import json
 import os
 import fcntl
+import uuid
 from contextlib import contextmanager
 from collections import defaultdict
 from typing import Optional, List, Dict
@@ -74,26 +75,39 @@ class Database:
 
     # ──────────────── CRUD ────────────────
 
-    def upsert(self, record: Record) -> tuple[Record, int, bool]:
+    # 중복(동일 기록) 판단에 쓰는 핵심 필드
+    _SIG_FIELDS = ("date", "total_distance", "total_time", "average_pace",
+                   "cadence", "average_heart_rate", "total_calories")
+
+    def _same_record(self, a: dict, b: dict) -> bool:
+        """두 기록이 '같은 데이터'인지 (핵심 필드 전부 일치)."""
+        return all(a.get(f) == b.get(f) for f in self._SIG_FIELDS)
+
+    def upsert(self, record: Record) -> tuple[Record, int, bool, bool]:
         """
-        사용자 ID + 날짜 기준으로 데이터 추가/갱신.
-        반환값: (저장된 레코드, 마지막 기록으로부터 경과일, 첫 기록 여부)
-        - days_diff: 기존 가장 최근 기록 대비 경과일.
-          양수=더 최근 날짜, 0=같은 날, 음수=과거 날짜를 뒤늦게 등록한 경우.
-        - is_first: 이 사용자의 첫 기록인지 여부(부호와 무관하게 명확히 구분).
+        기록 저장. 같은 날짜라도 데이터가 다르면 별개 기록으로 추가하고,
+        완전히 동일한 기록은 중복 저장하지 않는다.
+        반환값: (record, days_diff, is_first, is_dup)
+        - days_diff: 기존 가장 최근 기록 대비 경과일 (0=같은날, 양수=더 최근, 음수=과거)
+        - is_first: 이 사용자의 첫 기록 여부
+        - is_dup: 동일 기록이 이미 있어 저장하지 않음
         """
-        # 잠금으로 읽기→수정→쓰기를 원자적으로 처리 (연속 업로드 시 중복/유실 방지)
         with self._lock():
             records = self._load_all()
-            target_key = self._composite_key(record.user_id, record.date)
+            new = record.model_dump()
+            if not new.get("id"):
+                new["id"] = uuid.uuid4().hex
 
-            # 해당 유저의 과거 기록(최신순)
+            # 1. 완전히 동일한 기록이 이미 있으면 중복 → 저장 안 함
+            for r in records:
+                if r["user_id"] == record.user_id and self._same_record(r, new):
+                    return record, 0, False, True
+
+            # 2. 경과일/첫기록 계산 (기존 기록 기준)
             user_records = sorted(
                 [Record(**r) for r in records if r["user_id"] == record.user_id],
                 key=lambda x: x.date, reverse=True,
             )
-
-            # 1. 첫 기록 여부 및 마지막 기록일로부터 경과일 계산
             is_first = not user_records
             days_diff = 0
             if user_records:
@@ -101,18 +115,49 @@ class Database:
                 current_date = datetime.strptime(record.date, "%Y-%m-%d")
                 days_diff = (current_date - last_date).days
 
-            # 2. 기존 데이터 업데이트(덮어쓰기)
-            for i, r in enumerate(records):
-                if self._composite_key(r["user_id"], r["date"]) == target_key:
-                    records[i] = record.model_dump()
-                    self._save_all(records)
-                    return record, days_diff, is_first
-
-            # 3. 새 데이터 추가
-            records.append(record.model_dump())
+            # 3. 새 기록 추가 (같은 날짜여도 데이터가 다르면 별개로 저장)
+            records.append(new)
             self._save_all(records)
-            return record, days_diff, is_first
+            return record, days_diff, is_first, False
 
+
+    def get_record(self, record_id: str):
+        """id로 단일 기록 조회 (dict) 또는 None."""
+        for r in self._load_all():
+            if r.get("id") == record_id:
+                return r
+        return None
+
+    def delete_record(self, record_id: str, owner_id: str = None) -> bool:
+        """기록 삭제. owner_id 지정 시 그 사용자 소유일 때만 삭제."""
+        with self._lock():
+            records = self._load_all()
+            target = next((r for r in records if r.get("id") == record_id), None)
+            if not target:
+                return False
+            if owner_id is not None and target.get("user_id") != owner_id:
+                return False
+            self._save_all([r for r in records if r.get("id") != record_id])
+            return True
+
+    def update_record(self, record_id: str, fields: dict, owner_id: str = None) -> bool:
+        """기록 수정 후 데일리 점수 재계산. owner_id 지정 시 소유자만."""
+        with self._lock():
+            records = self._load_all()
+            for r in records:
+                if r.get("id") == record_id:
+                    if owner_id is not None and r.get("user_id") != owner_id:
+                        return False
+                    for k, v in fields.items():
+                        if v is not None:
+                            r[k] = v
+                    # 거리/시간 변경 반영하여 데일리 점수 재계산
+                    r["score"] = Score().calculate_daily_point(
+                        r.get("total_distance") or 0, Score.parse_minutes(r.get("total_time"))
+                    )
+                    self._save_all(records)
+                    return True
+            return False
 
     # ──────────────── 조회 ────────────────
     def get_user_records(self, user_id: str) -> List[Record]:

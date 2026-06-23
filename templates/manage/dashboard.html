@@ -3,7 +3,35 @@
 <div class="card">
     <div class="flex">
         <h2>📊 대시보드 개요</h2>
-        <a href="/manage/dashboard" class="refresh-btn">🔄 새로고침</a>
+        <div style="display:flex;align-items:center;gap:1rem;">
+            {% if is_admin %}<span class="badge badge-success">관리자</span>
+            <a href="/manage/logout" style="font-size:0.85rem;color:#888;text-decoration:none;">로그아웃</a>
+            {% else %}<a href="/manage/login?next=/manage/dashboard" class="refresh-btn">🔐 관리자 로그인</a>{% endif %}
+            <a href="/manage/dashboard" class="refresh-btn">🔄 새로고침</a>
+        </div>
+    </div>
+    {% if msg %}<p style="margin-top:0.8rem;color:#2e7d32;font-size:0.9rem;">✅ {{ msg }}</p>{% endif %}
+</div>
+
+<!-- 신규 회원 등록 (관리자) -->
+<div class="card">
+    <div class="flex">
+        <h2>👥 회원 <span style="font-size:0.85rem;color:#888;font-weight:normal;">({{ members|length }}명)</span></h2>
+    </div>
+    {% if is_admin %}
+    <form method="post" action="/manage/members/add" style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.7rem;">
+        <input type="text" name="name" placeholder="신규 회원 이름" required
+               style="flex:1;min-width:160px;padding:0.6rem;border:1px solid #ddd;border-radius:6px;">
+        <button type="submit" class="refresh-btn">➕ 회원 등록</button>
+    </form>
+    <p style="margin-top:0.5rem;font-size:0.82rem;color:#888;">등록하면 포털·정기모임·대회참가 등에서 바로 선택할 수 있어요. (회원이 직접 가입하려면 웹 채팅에서 "새 이름으로 시작"도 가능)</p>
+    {% else %}
+    <p style="margin-top:0.5rem;font-size:0.85rem;color:#888;">신규 회원 등록은 관리자 로그인 후 가능합니다.</p>
+    {% endif %}
+    <div style="margin-top:0.7rem;display:flex;flex-wrap:wrap;gap:0.4rem;">
+        {% for u in members %}
+        <span class="badge" style="background:#f0f0f3;color:#444;">{{ u.name }}</span>
+        {% endfor %}
     </div>
 </div>
 

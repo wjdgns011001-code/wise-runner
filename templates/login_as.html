@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1a1a2e">
+    <title>계정 확인 - 와이즈러너스</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1a2e; color: #222;
+               display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 1rem; }
+        .box { background: #fff; border-radius: 14px; padding: 1.6rem; width: 100%; max-width: 360px; box-shadow: 0 8px 30px rgba(0,0,0,0.3); }
+        h1 { font-size: 1.1rem; color: #1a1a2e; }
+        .name { color: #1565c0; }
+        p.desc { font-size: 0.85rem; color: #777; margin: 0.6rem 0 1rem; line-height: 1.5; }
+        input { width: 100%; padding: 0.7rem; border: 1px solid #ddd; border-radius: 8px; font-size: 1rem; margin-bottom: 0.6rem; }
+        button { width: 100%; padding: 0.75rem; background: #1a1a2e; color: #fff; border: none; border-radius: 8px; font-size: 1rem; cursor: pointer; }
+        .err { color: #c62828; font-size: 0.85rem; margin-bottom: 0.6rem; }
+        a.back { display: block; text-align: center; margin-top: 0.9rem; font-size: 0.82rem; color: #999; text-decoration: none; }
+    </style>
+</head>
+<body>
+<div class="box">
+    <h1>👤 <span class="name">{{ member_name }}</span> 계정</h1>
+    {% if is_set %}
+    <p class="desc">이 계정의 <strong>비밀번호</strong>를 입력하세요.</p>
+    {% else %}
+    <p class="desc">처음 사용하는 계정이에요. 본인만 쓸 수 있도록 <strong>비밀번호를 설정</strong>해 주세요. (다음부터 이 비밀번호로 로그인합니다)</p>
+    {% endif %}
+    {% if error %}<div class="err">⚠️ {{ error }}</div>{% endif %}
+    <form method="post" action="/login-as">
+        <input type="hidden" name="uid" value="{{ uid }}">
+        <input type="hidden" name="next" value="{{ next }}">
+        <input type="password" name="password" placeholder="비밀번호" required autofocus>
+        {% if not is_set %}
+        <input type="password" name="confirm" placeholder="비밀번호 확인" required>
+        {% endif %}
+        <button type="submit">{% if is_set %}로그인{% else %}비밀번호 설정하고 시작{% endif %}</button>
+    </form>
+    <a class="back" href="{{ next }}">← 돌아가기</a>
+</div>
+</body>
+</html>

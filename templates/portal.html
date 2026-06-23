@@ -73,7 +73,7 @@
         {% else %}
         <h2>👤 누구신가요?</h2>
         <p style="font-size:0.85rem;color:#888;margin:0.4rem 0 0.7rem;">처음 한 번만 선택하면 이 기기에서 계속 기억됩니다.</p>
-        <select onchange="if(this.value)location.href='/whoami?next=/portal&uid='+encodeURIComponent(this.value)">
+        <select onchange="if(this.value)location.href='/login-as?uid='+encodeURIComponent(this.value)+'&next=/portal'">
             <option value="">-- 이름을 선택하세요 --</option>
             {% for u in users %}
             <option value="{{ u.user_id }}">{{ u.name }}</option>
@@ -96,6 +96,7 @@
             <div class="stat"><div class="v">{{ "{:,}".format(breakdown.events) }}</div><div class="l">참가 포인트</div></div>
             <div class="stat"><div class="v">-{{ "{:,}".format(breakdown.spent) }}</div><div class="l">사용(구매)</div></div>
         </div>
+        <a href="/manage/user/{{ selected.user_id }}" class="btn btn-block" style="margin-top:0.9rem;background:#243049;">📝 내 기록 보기 / 수정</a>
     </div>
 
     <!-- 러닝 상점 -->

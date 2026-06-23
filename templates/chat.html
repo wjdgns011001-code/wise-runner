@@ -81,7 +81,7 @@ function startExisting() {
     const sel = document.getElementById('userSelect');
     if (!sel.value) { alert('사용자를 선택하세요.'); return; }
     // 쿠키에 '나'로 저장 후 채팅으로 (다음부터 자동 입장)
-    location.href = '/whoami?next=/chat&uid=' + encodeURIComponent(sel.value);
+    location.href = '/login-as?uid=' + encodeURIComponent(sel.value) + '&next=/chat';
 }
 async function startNew() {
     const name = document.getElementById('newName').value.trim();

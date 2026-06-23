@@ -26,7 +26,7 @@
             <a href="/whoami/clear?next=/manage/meetings" style="font-size:0.8rem;color:#888;">변경</a>
             {% else %}
             <span style="font-size:0.82rem;color:#888;">나:</span>
-            <select onchange="if(this.value)location.href='/whoami?next=/manage/meetings&uid='+encodeURIComponent(this.value)" style="padding:0.4rem 0.6rem;border:1px solid #ddd;border-radius:6px;">
+            <select onchange="if(this.value)location.href='/login-as?uid='+encodeURIComponent(this.value)+'&next=/manage/meetings'" style="padding:0.4rem 0.6rem;border:1px solid #ddd;border-radius:6px;">
                 <option value="">선택</option>
                 {% for u in users %}<option value="{{ u.user_id }}">{{ u.name }}</option>{% endfor %}
             </select>

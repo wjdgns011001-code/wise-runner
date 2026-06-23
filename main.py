@@ -328,9 +328,13 @@ async def handle_interaction(user_id: str, utterance: str = "", image_url: str =
                         f"--------------------------\n"
                         f"🎁 획득 점수: {record.score}점\n"
                     )
-                    _, days_diff, is_first = db_handler.upsert(record)
+                    _, days_diff, is_first, is_dup = db_handler.upsert(record)
 
-                    # 기록 올린 사람을 제외한 나머지 구독자에게 피드 알림
+                    if is_dup:
+                        # 완전히 동일한 기록 → 저장하지 않음
+                        return msg + "ℹ️ 이미 동일한 기록이 등록되어 있어 추가하지 않았어요."
+
+                    # 새 기록 → 올린 사람 제외 나머지 구독자에게 피드 알림
                     others = [u for u in push.subscribed_user_ids() if u != user_id]
                     push.notify(
                         others,
@@ -342,7 +346,7 @@ async def handle_interaction(user_id: str, utterance: str = "", image_url: str =
                     if is_first:
                         msg += "🎉 달리기 시작한 첫날 기록을 축하드립니다!"
                     elif days_diff == 0:
-                        msg += "✅ 오늘 이미 기록이 있어 최신 데이터로 업데이트했습니다."
+                        msg += "➕ 오늘 추가 기록을 등록했어요! (하루에도 여러 번 기록할 수 있어요)"
                     elif days_diff > 0:
                         msg += f"🔥 무려 {days_diff}일 만에 다시 달리셨네요! 환영합니다."
                     else:
@@ -432,7 +436,7 @@ async def manage_feed(request: Request, page: int = 1):
 
 
 @app.get("/manage/dashboard", response_class=HTMLResponse)
-async def manage_dashboard(request: Request, page: int = 1):
+async def manage_dashboard(request: Request, page: int = 1, msg: str = ""):
     """대시보드 페이지 (사용자 랭킹 15명씩 페이징)"""
     all_records = db_handler._load_all()
     
@@ -471,13 +475,27 @@ async def manage_dashboard(request: Request, page: int = 1):
         "manage/dashboard.html",
         active="dashboard", stats=stats, rankings=rankings,
         page=page, total_pages=total_pages, start_rank=start,
+        is_admin=is_admin(request), members=_registered_users(),
+        msg=msg,
     )
     return HTMLResponse(content=html)
 
 
+@app.post("/manage/members/add")
+async def manage_members_add(request: Request, name: str = Form(...)):
+    """신규 회원 등록 (관리자 전용) — 이름으로 회원 생성."""
+    if not is_admin(request):
+        return RedirectResponse(url="/manage/login?next=/manage/dashboard&error=관리자만+등록할+수+있습니다", status_code=303)
+    name = (name or "").strip()
+    if not name:
+        return RedirectResponse(url="/manage/dashboard?msg=이름을+입력하세요", status_code=303)
+    register_user_name("web_" + uuid.uuid4().hex, name)
+    return RedirectResponse(url=f"/manage/dashboard?msg={name}+회원이+등록되었습니다", status_code=303)
+
+
 
 @app.get("/manage/user/{user_id}", response_class=HTMLResponse)
-async def manage_user_detail(request: Request, user_id: str, page: int = 1, wpage: int = 1):
+async def manage_user_detail(request: Request, user_id: str, page: int = 1, wpage: int = 1, msg: str = ""):
     """개별 사용자 상세: 통계 + 점수 획득 내역(데일리/주간/참가/구매)"""
     stats = db_handler.get_user_stats(user_id)
     breakdown = db_handler.get_points_breakdown(user_id)
@@ -496,6 +514,8 @@ async def manage_user_detail(request: Request, user_id: str, page: int = 1, wpag
         active="dashboard",
         user_id=user_id,
         user_name=get_user_name(user_id) or "(이름 미등록)",
+        is_owner=(get_me(request) == user_id),
+        msg=msg,
         stats=stats,
         breakdown=breakdown,
         recent=recent,
@@ -511,6 +531,62 @@ async def manage_user_detail(request: Request, user_id: str, page: int = 1, wpag
         w_total_pages=w_total_pages,
     )
     return HTMLResponse(content=html)
+
+
+@app.post("/manage/records/delete/{rid}")
+async def manage_records_delete(request: Request, rid: str):
+    """개인 기록 삭제 (본인만)."""
+    me = get_me(request)
+    rec = db_handler.get_record(rid)
+    if not rec:
+        return RedirectResponse(url="/manage/dashboard?msg=기록을+찾을+수+없습니다", status_code=303)
+    if not me or me != rec.get("user_id"):
+        return RedirectResponse(url=f"/manage/user/{rec.get('user_id')}?msg=본인만+삭제할+수+있어요", status_code=303)
+    db_handler.delete_record(rid, owner_id=me)
+    return RedirectResponse(url=f"/manage/user/{me}?msg=기록이+삭제되었습니다", status_code=303)
+
+
+@app.get("/manage/records/edit/{rid}", response_class=HTMLResponse)
+async def manage_records_edit_form(request: Request, rid: str):
+    """개인 기록 수정 폼 (본인만)."""
+    me = get_me(request)
+    rec = db_handler.get_record(rid)
+    if not rec:
+        return HTMLResponse("<p>기록을 찾을 수 없습니다.</p>", status_code=404)
+    if not me or me != rec.get("user_id"):
+        return RedirectResponse(url=f"/manage/user/{rec.get('user_id')}?msg=본인만+수정할+수+있어요", status_code=303)
+    html = render_template("manage/record_edit.html", active="dashboard", r=rec)
+    return HTMLResponse(content=html)
+
+
+@app.post("/manage/records/edit/{rid}")
+async def manage_records_edit(request: Request, rid: str,
+                              date: str = Form(...), total_distance: float = Form(...),
+                              total_time: str = Form(...), average_pace: str = Form(""),
+                              cadence: str = Form(""), average_heart_rate: str = Form(""),
+                              total_calories: str = Form("")):
+    """개인 기록 수정 저장 (본인만). 점수 자동 재계산."""
+    me = get_me(request)
+    rec = db_handler.get_record(rid)
+    if not rec:
+        return RedirectResponse(url="/manage/dashboard?msg=기록을+찾을+수+없습니다", status_code=303)
+    if not me or me != rec.get("user_id"):
+        return RedirectResponse(url=f"/manage/user/{rec.get('user_id')}?msg=본인만+수정할+수+있어요", status_code=303)
+
+    def _int_or_none(v):
+        v = (v or "").strip()
+        return int(v) if v.isdigit() else None
+
+    db_handler.update_record(rid, {
+        "date": date,
+        "total_distance": total_distance,
+        "total_time": total_time,
+        "average_pace": (average_pace or "").strip() or None,
+        "cadence": _int_or_none(cadence),
+        "average_heart_rate": _int_or_none(average_heart_rate),
+        "total_calories": _int_or_none(total_calories),
+    }, owner_id=me)
+    return RedirectResponse(url=f"/manage/user/{me}?msg=기록이+수정되었습니다", status_code=303)
 
 
 @app.get("/manage/purchases", response_class=HTMLResponse)
@@ -821,7 +897,7 @@ async def manage_meetings_add(request: Request, title: str = Form(...), date: st
                               place: str = Form(""), content: str = Form(""), mtype: str = Form("regular")):
     me = get_me(request)
     if not me:
-        return RedirectResponse(url="/whoami?next=/manage/meetings", status_code=303)
+        return RedirectResponse(url="/manage/meetings?msg=먼저+이름을+선택하세요", status_code=303)
     if not date:
         return RedirectResponse(url="/manage/meetings?msg=날짜는+필수입니다", status_code=303)
     m = meeting.add_meeting(me, title, date, place, content, mtype)
@@ -839,7 +915,7 @@ async def manage_meetings_add(request: Request, title: str = Form(...), date: st
 async def manage_meetings_attend(request: Request, mid: str = Form(...)):
     me = get_me(request)
     if not me:
-        return RedirectResponse(url="/whoami?next=/manage/meetings", status_code=303)
+        return RedirectResponse(url="/manage/meetings?msg=먼저+이름을+선택하세요", status_code=303)
     m = meeting.get_meeting(mid)
     attending, _ = meeting.toggle_attend(mid, me)
     # 정기모임 참석 → '정기 동호회 참석'(+300) 이벤트를 대회참가기록에 자동 동기화
@@ -856,7 +932,7 @@ async def manage_meetings_attend(request: Request, mid: str = Form(...)):
 async def manage_meetings_photo(request: Request, mid: str, file: UploadFile = File(...)):
     me = get_me(request)
     if not me:
-        return RedirectResponse(url="/whoami?next=/manage/meetings", status_code=303)
+        return RedirectResponse(url="/manage/meetings?msg=먼저+이름을+선택하세요", status_code=303)
     m = meeting.get_meeting(mid)
     if not m:
         return RedirectResponse(url="/manage/meetings?msg=모임을+찾을+수+없습니다", status_code=303)
@@ -962,26 +1038,101 @@ def _registered_users() -> list:
     return users
 
 
-# ──────────────── 기기별 "나" 식별 (쿠키, 1회 선택 후 기억) ────────────────
+# ──────────────── 기기별 "나" 식별 + 계정 비밀번호 ────────────────
 ME_COOKIE = "me_uid"
+_ME_SECRET = "wise-runner-me-cookie-secret"   # 쿠키 서명용
+USER_PW_PATH = "data/user_pw.json"
+
+
+def _load_user_pw() -> dict:
+    if not os.path.exists(USER_PW_PATH):
+        return {}
+    try:
+        with open(USER_PW_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _save_user_pw(data: dict):
+    os.makedirs(os.path.dirname(USER_PW_PATH), exist_ok=True)
+    with open(USER_PW_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f)
+
+
+def _pw_hash(pw: str) -> str:
+    return hashlib.sha256(("uchamp-pw:" + pw).encode("utf-8")).hexdigest()
+
+
+def has_user_password(uid: str) -> bool:
+    return uid in _load_user_pw()
+
+
+def set_user_password(uid: str, pw: str):
+    d = _load_user_pw()
+    d[uid] = _pw_hash(pw)
+    _save_user_pw(d)
+
+
+def check_user_password(uid: str, pw: str) -> bool:
+    return _load_user_pw().get(uid) == _pw_hash(pw)
+
+
+def _me_sign(uid: str) -> str:
+    """쿠키 서명: 서버 비밀 + uid + 계정 비번해시 기반 (비번 바뀌면 무효화)."""
+    pwh = _load_user_pw().get(uid, "")
+    return hashlib.sha256((_ME_SECRET + uid + pwh).encode("utf-8")).hexdigest()[:32]
 
 
 def get_me(request: Request) -> str:
-    """쿠키에 저장된 내 user_id (등록 사용자일 때만 유효). 없으면 ''."""
-    uid = request.cookies.get(ME_COOKIE, "")
-    if uid and any(u["user_id"] == uid for u in _registered_users()):
-        return uid
-    return ""
+    """서명된 쿠키에서 내 user_id 추출 (위조 불가). 유효하지 않으면 ''."""
+    raw = request.cookies.get(ME_COOKIE, "")
+    if "." not in raw:
+        return ""
+    uid, sig = raw.rsplit(".", 1)
+    if not any(u["user_id"] == uid for u in _registered_users()):
+        return ""
+    if sig != _me_sign(uid):
+        return ""
+    return uid
 
 
 def _set_me_cookie(resp, uid: str):
-    resp.set_cookie(ME_COOKIE, uid, max_age=60 * 60 * 24 * 365, samesite="lax")
+    resp.set_cookie(ME_COOKIE, f"{uid}.{_me_sign(uid)}",
+                    max_age=60 * 60 * 24 * 365, samesite="lax")
     return resp
 
 
-@app.get("/whoami")
-async def whoami_set(uid: str, next: str = "/manage"):
-    """내가 누구인지 한 번 선택 → 쿠키 저장 후 원래 화면으로."""
+@app.get("/login-as", response_class=HTMLResponse)
+async def login_as_form(request: Request, uid: str, next: str = "/manage", error: str = ""):
+    """계정 선택 → 비밀번호 설정(최초) 또는 입력(이후)."""
+    name = get_user_name(uid)
+    if not name:
+        return RedirectResponse(url=next, status_code=303)
+    html = render_template(
+        "login_as.html", uid=uid, member_name=name, next=next, error=error,
+        is_set=has_user_password(uid),
+    )
+    return HTMLResponse(content=html)
+
+
+@app.post("/login-as")
+async def login_as_submit(uid: str = Form(...), password: str = Form(...),
+                          confirm: str = Form(""), next: str = Form("/manage")):
+    name = get_user_name(uid)
+    if not name:
+        return RedirectResponse(url=next, status_code=303)
+    if has_user_password(uid):
+        # 기존 비번 입력
+        if not check_user_password(uid, password):
+            return RedirectResponse(
+                url=f"/login-as?uid={uid}&next={next}&error=비밀번호가+올바르지+않습니다", status_code=303)
+    else:
+        # 최초: 비번 설정 (확인 일치 필요)
+        if len(password) < 1 or password != confirm:
+            return RedirectResponse(
+                url=f"/login-as?uid={uid}&next={next}&error=비밀번호와+확인이+일치하지+않습니다", status_code=303)
+        set_user_password(uid, password)
     return _set_me_cookie(RedirectResponse(url=next, status_code=303), uid)
 
 

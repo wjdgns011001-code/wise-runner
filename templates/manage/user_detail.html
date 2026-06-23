@@ -3,9 +3,10 @@
 {% block content %}
 <div class="card">
     <div class="flex">
-        <h2>👤 {{ user_name }} 님 상세</h2>
+        <h2>👤 {{ user_name }} 님 상세{% if is_owner %} <span class="badge badge-success" style="font-size:0.7rem;">내 기록</span>{% endif %}</h2>
         <a href="/manage/dashboard" class="refresh-btn">← 대시보드</a>
     </div>
+    {% if msg %}<p style="margin-top:0.7rem;color:#2e7d32;font-size:0.9rem;">✅ {{ msg }}</p>{% endif %}
 </div>
 
 <!-- 개인 통계 -->
@@ -107,14 +108,27 @@
 <div class="card">
     <h2>🏃 데일리 기록 <span style="font-size:0.8rem;color:#888;">({{ record_count }}건 · {{ "{:,}".format(breakdown.daily) }}점)</span></h2>
     <table>
-        <thead><tr><th>날짜</th><th>거리</th><th>시간</th><th>데일리 점수</th></tr></thead>
+        <thead><tr><th>날짜</th><th>거리</th><th>시간</th><th>데일리 점수</th>{% if is_owner %}<th>관리</th>{% endif %}</tr></thead>
         <tbody>
             {% if records %}
             {% for r in records %}
-            <tr><td data-label="날짜">{{ r.date }}</td><td data-label="거리">{{ r.total_distance }} km</td><td data-label="시간">{{ r.total_time }}</td><td data-label="데일리 점수"><span class="badge badge-success">+{{ r.score }}</span></td></tr>
+            <tr>
+                <td data-label="날짜">{{ r.date }}</td>
+                <td data-label="거리">{{ r.total_distance }} km</td>
+                <td data-label="시간">{{ r.total_time }}</td>
+                <td data-label="데일리 점수"><span class="badge badge-success">+{{ r.score }}</span></td>
+                {% if is_owner %}
+                <td data-label="관리" style="white-space:nowrap;">
+                    <a href="/manage/records/edit/{{ r.id }}" class="badge badge-primary" style="text-decoration:none;">✏️ 수정</a>
+                    <form method="post" action="/manage/records/delete/{{ r.id }}" style="display:inline;" onsubmit="return confirm('이 기록을 삭제할까요?');">
+                        <button type="submit" class="badge badge-warning" style="border:none;cursor:pointer;">🗑 삭제</button>
+                    </form>
+                </td>
+                {% endif %}
+            </tr>
             {% endfor %}
             {% else %}
-            <tr><td colspan="4" style="text-align:center;color:#999;padding:1rem;">기록 없음</td></tr>
+            <tr><td colspan="{% if is_owner %}5{% else %}4{% endif %}" style="text-align:center;color:#999;padding:1rem;">기록 없음</td></tr>
             {% endif %}
         </tbody>
     </table>

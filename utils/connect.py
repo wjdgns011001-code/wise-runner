@@ -77,6 +77,7 @@ other_instruction = """
 class Record(BaseModel):
     # 저장에 반드시 필요한 값: 러닝 거리(total_distance)와 러닝 시간(total_time).
     # 그 외 값은 사진마다 없을 수 있으므로 모두 선택값으로 둔다.
+    id: Optional[str] = None
     user_id: Optional[str] = None
     date: Optional[str] = Field(default=None, validate_default=True, description="YYYY-MM-DD 형식의 활동 날짜")
     total_time: str = Field(..., description="HH:MM:SS 형식의 총 시간")
