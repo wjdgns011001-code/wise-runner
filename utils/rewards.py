@@ -31,8 +31,8 @@ def _save(path: str, items: list):
 
 # ──────────────── 이벤트 ────────────────
 
-def add_event(user_id: str, event_type: str, date: str = "") -> dict:
-    """event_type 은 Score.EVENT_TYPES 의 key."""
+def add_event(user_id: str, event_type: str, date: str = "", ref: str = None) -> dict:
+    """event_type 은 Score.EVENT_TYPES 의 key. ref: 출처 식별(예: 모임 id)."""
     if event_type not in Score.EVENT_TYPES:
         raise ValueError(f"알 수 없는 이벤트 종류: {event_type}")
     label, points = Score.EVENT_TYPES[event_type]
@@ -44,6 +44,7 @@ def add_event(user_id: str, event_type: str, date: str = "") -> dict:
         "points": points,
         "date": date or datetime.now().strftime("%Y-%m-%d"),
         "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "ref": ref,
     }
     items = _load(EVENTS_PATH)
     items.append(meta)
@@ -57,6 +58,24 @@ def list_events(user_id: str = None) -> list:
         items = [e for e in items if e.get("user_id") == user_id]
     items.sort(key=lambda x: x.get("created_at", ""), reverse=True)
     return items
+
+
+def has_event_ref(user_id: str, ref: str) -> bool:
+    """해당 사용자에게 ref(출처)로 등록된 이벤트가 있는지."""
+    return any(e.get("user_id") == user_id and e.get("ref") == ref for e in _load(EVENTS_PATH))
+
+
+def delete_events_by_ref(ref: str, user_id: str = None) -> int:
+    """ref(출처)로 등록된 이벤트 삭제. user_id 지정 시 그 사용자만. 삭제 수 반환."""
+    items = _load(EVENTS_PATH)
+    keep = [
+        e for e in items
+        if not (e.get("ref") == ref and (user_id is None or e.get("user_id") == user_id))
+    ]
+    removed = len(items) - len(keep)
+    if removed:
+        _save(EVENTS_PATH, keep)
+    return removed
 
 
 def delete_event(event_id: str) -> bool:

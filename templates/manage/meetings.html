@@ -43,8 +43,15 @@
 <div class="card">
     <h2>✍️ 모임글 올리기</h2>
     <form method="post" action="/manage/meetings/add" style="display:flex;flex-direction:column;gap:0.6rem;">
-        <input type="text" name="title" placeholder="모임 제목 (예: 6월 정기런)" required
-               style="padding:0.6rem;border:1px solid #ddd;border-radius:6px;">
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <select name="mtype" style="padding:0.6rem;border:1px solid #ddd;border-radius:6px;">
+                {% for k, v in types.items() %}
+                <option value="{{ k }}" {% if k == 'regular' %}selected{% endif %}>{{ v }}{% if k == 'regular' %} (참석 +300점){% endif %}</option>
+                {% endfor %}
+            </select>
+            <input type="text" name="title" placeholder="모임 제목 (예: 6월 정기런)" required
+                   style="flex:1;min-width:160px;padding:0.6rem;border:1px solid #ddd;border-radius:6px;">
+        </div>
         <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
             <input type="date" name="date" required value="{{ today }}"
                    style="padding:0.6rem;border:1px solid #ddd;border-radius:6px;">
@@ -66,6 +73,7 @@
         <div class="mt-top">
             <div>
                 <div class="mt-title">{{ m.title }}
+                    <span class="badge {% if m.is_regular %}badge-success{% else %}badge-primary{% endif %}" style="font-size:0.7rem;">{{ m.type_label }}{% if m.is_regular %} +300{% endif %}</span>
                     {% if m.date >= today %}<span class="badge badge-warning" style="font-size:0.7rem;">예정</span>
                     {% else %}<span class="badge" style="background:#f0f0f0;color:#999;font-size:0.7rem;">종료</span>{% endif %}
                 </div>
@@ -96,13 +104,14 @@
             <form method="post" action="/manage/meetings/attend">
                 <input type="hidden" name="mid" value="{{ m.id }}">
                 <button type="submit" class="btn-att {% if m.attending %}on{% else %}off{% endif %}">
-                    {% if m.attending %}✅ 참석 취소{% else %}🙋 참석{% endif %}
+                    {% if m.attending %}✅ 참석 취소{% else %}🙋 참석{% if m.is_regular %} (+300){% endif %}{% endif %}
                 </button>
             </form>
             {% endif %}
             {% if m.can_photo %}
             <form method="post" action="/manage/meetings/photo/{{ m.id }}" enctype="multipart/form-data" style="display:flex;gap:0.4rem;align-items:center;">
-                <input type="file" name="file" accept="image/*" required style="font-size:0.8rem;max-width:170px;">
+                <input type="file" name="file" accept="image/*" required style="font-size:0.8rem;max-width:170px;" onchange="previewPick(this)">
+                <img class="pick-prev" alt="" style="display:none;width:46px;height:46px;object-fit:cover;border-radius:6px;border:1px solid #ddd;">
                 <button type="submit" class="badge badge-primary" style="border:none;cursor:pointer;">📷 단체사진 올리기</button>
             </form>
             {% endif %}
@@ -114,4 +123,13 @@
     {% endif %}
     {{ pg.bar('/manage/meetings', page, total_pages) }}
 </div>
+
+<script>
+    // 사진 선택 시 옆에 미리보기 표시
+    function previewPick(inp) {
+        const f = inp.files && inp.files[0];
+        const img = inp.parentElement.querySelector('.pick-prev');
+        if (f && img) { img.src = URL.createObjectURL(f); img.style.display = 'inline-block'; }
+    }
+</script>
 {% endblock %}

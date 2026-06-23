@@ -16,6 +16,9 @@ from datetime import datetime
 MEETINGS_PATH = "data/meetings.json"
 PHOTO_DIR = "data/meetings"
 
+# 모임 타입 (정기모임 참석 시 +300점 / club_regular 이벤트 자동 등록)
+TYPES = {"regular": "정기모임", "dinner": "회식", "flash": "번개모임"}
+
 
 def _load() -> list:
     if not os.path.exists(MEETINGS_PATH):
@@ -47,9 +50,11 @@ def get_meeting(mid: str):
     return None
 
 
-def add_meeting(author_id: str, title: str, date: str, place: str = "", content: str = "") -> dict:
+def add_meeting(author_id: str, title: str, date: str, place: str = "", content: str = "",
+                mtype: str = "regular") -> dict:
     meta = {
         "id": uuid.uuid4().hex,
+        "type": mtype if mtype in TYPES else "regular",
         "title": (title or "").strip() or "(제목 없음)",
         "date": date,
         "place": (place or "").strip(),

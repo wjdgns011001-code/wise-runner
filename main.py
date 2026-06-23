@@ -788,8 +788,12 @@ async def manage_meetings(request: Request, msg: str = "", page: int = 1):
     meetings = []
     for m in raw:
         att = m.get("attendees", [])
+        mtype = m.get("type", "regular")
         meetings.append({
             "id": m["id"],
+            "type": mtype,
+            "type_label": meeting.TYPES.get(mtype, "정기모임"),
+            "is_regular": mtype == "regular",
             "title": m["title"],
             "date": m["date"],
             "place": m.get("place", ""),
@@ -799,13 +803,14 @@ async def manage_meetings(request: Request, msg: str = "", page: int = 1):
             "attend_count": len(att),
             "attending": bool(me) and me in att,
             "photos": ["/meeting/photo/" + fn for fn in m.get("photos", [])],
-            "can_photo": bool(me) and today >= m["date"],
+            "can_photo": bool(me),
             "can_delete": bool(me) and (me == m.get("author_id") or is_admin(request)),
         })
     html = render_template(
         "manage/meetings.html",
         active="meetings", meetings=meetings, me=me, me_user=me_user,
         users=_registered_users(), today=today, msg=msg,
+        types=meeting.TYPES,
         page=page, total_pages=total_pages,
     )
     return HTMLResponse(content=html)
@@ -813,13 +818,13 @@ async def manage_meetings(request: Request, msg: str = "", page: int = 1):
 
 @app.post("/manage/meetings/add")
 async def manage_meetings_add(request: Request, title: str = Form(...), date: str = Form(...),
-                              place: str = Form(""), content: str = Form("")):
+                              place: str = Form(""), content: str = Form(""), mtype: str = Form("regular")):
     me = get_me(request)
     if not me:
         return RedirectResponse(url="/whoami?next=/manage/meetings", status_code=303)
     if not date:
         return RedirectResponse(url="/manage/meetings?msg=날짜는+필수입니다", status_code=303)
-    m = meeting.add_meeting(me, title, date, place, content)
+    m = meeting.add_meeting(me, title, date, place, content, mtype)
     # 새 모임 → 전체 알림
     push.notify(
         push.subscribed_user_ids(),
@@ -835,7 +840,15 @@ async def manage_meetings_attend(request: Request, mid: str = Form(...)):
     me = get_me(request)
     if not me:
         return RedirectResponse(url="/whoami?next=/manage/meetings", status_code=303)
-    meeting.toggle_attend(mid, me)
+    m = meeting.get_meeting(mid)
+    attending, _ = meeting.toggle_attend(mid, me)
+    # 정기모임 참석 → '정기 동호회 참석'(+300) 이벤트를 대회참가기록에 자동 동기화
+    if m and m.get("type", "regular") == "regular":
+        if attending:
+            if not rewards.has_event_ref(me, mid):
+                rewards.add_event(me, "club_regular", m["date"], ref=mid)
+        else:
+            rewards.delete_events_by_ref(mid, me)
     return RedirectResponse(url="/manage/meetings", status_code=303)
 
 
@@ -847,8 +860,6 @@ async def manage_meetings_photo(request: Request, mid: str, file: UploadFile = F
     m = meeting.get_meeting(mid)
     if not m:
         return RedirectResponse(url="/manage/meetings?msg=모임을+찾을+수+없습니다", status_code=303)
-    if datetime.now().strftime("%Y-%m-%d") < m["date"]:
-        return RedirectResponse(url="/manage/meetings?msg=모임+당일부터+사진을+올릴+수+있어요", status_code=303)
     content = await file.read()
     if content:
         meeting.save_photo(mid, file.filename, content)
@@ -866,6 +877,7 @@ async def manage_meetings_delete(request: Request, mid: str):
     if not (me and (me == m.get("author_id") or is_admin(request))):
         return RedirectResponse(url="/manage/meetings?msg=작성자+또는+관리자만+삭제할+수+있어요", status_code=303)
     meeting.delete_meeting(mid)
+    rewards.delete_events_by_ref(mid)  # 이 모임으로 적립된 정기모임 참석 점수도 회수
     return RedirectResponse(url="/manage/meetings?msg=모임글이+삭제되었습니다", status_code=303)
 
 
