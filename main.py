@@ -1253,7 +1253,7 @@ async def portal_buy(uid: str = Form(...), item: str = Form(...)):
 async def pwa_manifest():
     return JSONResponse({
         "name": "와이즈러너스",
-        "short_name": "러닝",
+        "short_name": "와이즈러너스",
         "start_url": "/manage",
         "scope": "/",
         "display": "standalone",
