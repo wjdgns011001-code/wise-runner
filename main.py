@@ -81,54 +81,6 @@ def register_user_name(user_id: str, user_name: str):
     _save_user_mapping(mapping)
 
 
-# ──────────────── 동호회 참석 확인 대기 상태 ────────────────
-# 수요일(정기 동호회날) 기록 업로드 후, 참석 여부 답변을 기다리는 상태를 보관.
-PENDING_CLUB_PATH = "data/pending_club.json"
-
-
-def _load_pending_club() -> dict:
-    if not os.path.exists(PENDING_CLUB_PATH):
-        return {}
-    try:
-        with open(PENDING_CLUB_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-
-def _save_pending_club(data: dict):
-    os.makedirs(os.path.dirname(PENDING_CLUB_PATH), exist_ok=True)
-    with open(PENDING_CLUB_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
-
-def set_pending_club(user_id: str, date: str):
-    data = _load_pending_club()
-    data[user_id] = {"date": date, "tries": 0}
-    _save_pending_club(data)
-
-
-def bump_pending_club_tries(user_id: str) -> int:
-    """모호한 답변 시 재질의 횟수 증가. 증가 후 횟수 반환."""
-    data = _load_pending_club()
-    if user_id in data:
-        data[user_id]["tries"] = data[user_id].get("tries", 0) + 1
-        _save_pending_club(data)
-        return data[user_id]["tries"]
-    return 0
-
-
-def get_pending_club(user_id: str):
-    return _load_pending_club().get(user_id)
-
-
-def clear_pending_club(user_id: str):
-    data = _load_pending_club()
-    if user_id in data:
-        del data[user_id]
-        _save_pending_club(data)
-
-
 def _kakao_response(msg) -> JSONResponse:
     """카카오톡 simpleText 응답 규격으로 감싸 반환."""
     response_body = {
@@ -269,28 +221,6 @@ async def handle_interaction(user_id: str, utterance: str = "", image_url: str =
     """
     utterance = utterance or ""
 
-    # ── 동호회 참석 확인 답변 처리 (수요일 기록 후) ──
-    if get_pending_club(user_id) and not image_url:
-        pend = get_pending_club(user_id)
-        answer = utterance.strip()
-        yes_kw = ["예", "네", "응", "참석", "참여", "갔", "했", "ㅇㅇ", "ㅇ", "yes", "y", "o"]
-        no_kw = ["아니", "안", "불참", "노", "못", "ㄴㄴ", "ㄴ", "no", "n", "x"]
-        if any(k in answer.lower() for k in no_kw):
-            clear_pending_club(user_id)
-            return "알겠습니다! 오늘 기록 점수만 적립할게요. 다음 동호회에서 만나요 🙂"
-        elif any(k in answer.lower() for k in yes_kw):
-            clear_pending_club(user_id)
-            try:
-                rewards.add_event(user_id, "club_regular", pend.get("date", ""))
-                label, pts = Score.EVENT_TYPES["club_regular"]
-                return f"🎉 {label}이 등록되었습니다! +{pts}점 적립 ✅\n오늘도 함께 달려주셔서 감사해요!"
-            except Exception:
-                return "동호회 참석 등록에 실패했습니다. 잠시 후 다시 시도해 주세요."
-        else:
-            # 예/아니오가 아니면 더는 되묻지 않고, 대기 해제 후 일반 메시지로 처리한다.
-            clear_pending_club(user_id)
-            # (아래 일반 처리 로직으로 자연스럽게 넘어감)
-
     # ── 새 사용자 이름 등록 처리 ──
     if is_pending_user(user_id) and not image_url:
         user_name = utterance.strip()
@@ -351,18 +281,6 @@ async def handle_interaction(user_id: str, utterance: str = "", image_url: str =
                         msg += f"🔥 무려 {days_diff}일 만에 다시 달리셨네요! 환영합니다."
                     else:
                         msg += f"🗓️ 과거({record.date}) 기록을 추가했습니다."
-
-                    # 오늘이 수요일이고, 그 기록이 '오늘(금일)' 기록일 때만 동호회 참석을 물어본다.
-                    # (과거 수요일 사진을 뒤늦게 올린 경우엔 묻지 않음)
-                    today_str = datetime.now().strftime("%Y-%m-%d")
-                    is_today_wed = datetime.now().weekday() == 2  # 월=0 … 수=2
-                    if is_today_wed and record.date == today_str:
-                        set_pending_club(user_id, record.date)
-                        msg += (
-                            "\n\n📣 오늘은 **수요일, 정기 동호회날**이에요!\n"
-                            "정기 동호회에 참석하셨나요? **'예'** 또는 **'아니오'** 로 답해 주세요.\n"
-                            "(참석 시 +300점 적립 🎉)"
-                        )
                     return msg
                 return f"{record}"
             except Exception:

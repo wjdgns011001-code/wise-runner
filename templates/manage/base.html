@@ -230,6 +230,34 @@
             if (!iframe.src && iframe.dataset.src) iframe.src = iframe.dataset.src;
             panel.classList.toggle('open');
         }
+
+        // ── 좌우 스와이프로 탭 전환 (모바일) ──
+        (function () {
+            const ORDER = ['feed', 'dashboard', 'meetings', 'events', 'marathons', 'purchases', 'files', 'notices'];
+            const URLS = {
+                feed: '/manage', dashboard: '/manage/dashboard', meetings: '/manage/meetings',
+                events: '/manage/events', marathons: '/manage/marathons', purchases: '/manage/purchases',
+                files: '/manage/files', notices: '/manage/notices'
+            };
+            const cur = ORDER.indexOf('{{ active }}');
+            if (cur < 0) return;
+            let x0 = null, y0 = null;
+            document.addEventListener('touchstart', function (e) {
+                if (e.touches.length !== 1) { x0 = null; return; }
+                x0 = e.touches[0].clientX; y0 = e.touches[0].clientY;
+            }, { passive: true });
+            document.addEventListener('touchend', function (e) {
+                if (x0 === null) return;
+                const t = e.changedTouches[0];
+                const dx = t.clientX - x0, dy = t.clientY - y0;
+                x0 = null;
+                if (document.querySelector('.side-panel.open')) return;   // 패널 열렸으면 무시
+                if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 2) {
+                    const ni = dx < 0 ? cur + 1 : cur - 1;   // 왼쪽으로 밀면 다음 탭
+                    if (ni >= 0 && ni < ORDER.length) location.href = URLS[ORDER[ni]];
+                }
+            }, { passive: true });
+        })();
     </script>
 </body>
 </html>
