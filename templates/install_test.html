@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1a1a2e">
+    <link rel="manifest" href="/manifest-test.json">
+    <link rel="apple-touch-icon" href="/static/icon-192.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="{{ app_name }}">
+    <title>{{ app_name }} 설치</title>
+    <script>if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js').catch(()=>{}); }</script>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+               background:#1a1a2e; color:#eee; min-height:100vh; padding:1.2rem; }
+        .wrap { max-width:520px; margin:0 auto; }
+        .logo { text-align:center; padding:1.6rem 0 1rem; }
+        .logo img { width:88px; height:88px; border-radius:20px; }
+        .logo h1 { font-size:1.35rem; margin-top:0.8rem; }
+        .logo p { font-size:0.88rem; color:#9aa3b8; margin-top:0.35rem; }
+        .card { background:#242c44; border-radius:14px; padding:1.1rem 1.2rem; margin-bottom:0.9rem; }
+        .card h2 { font-size:1rem; margin-bottom:0.6rem; }
+        .card ol { margin-left:1.1rem; font-size:0.9rem; line-height:1.9; color:#cfd5e4; }
+        .btn { display:block; text-align:center; background:#4c6ef5; color:#fff; text-decoration:none;
+               padding:0.85rem; border-radius:10px; font-weight:600; border:none; width:100%;
+               font-size:0.95rem; cursor:pointer; }
+        .btn.ghost { background:#38405c; margin-top:0.6rem; }
+        .note { font-size:0.82rem; color:#8b93a8; line-height:1.7; margin-top:0.8rem; }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <div class="logo">
+        <img src="/static/icon-192.png" alt="">
+        <h1>{{ app_name }}</h1>
+        <p>복약 기록 기능이 들어간 테스트용 앱입니다.<br>기존 <strong>{{ main_app_name }}</strong> 앱과 따로 설치됩니다.</p>
+    </div>
+
+    <div class="card">
+        <button id="install" class="btn" style="display:none;">📲 홈 화면에 앱 설치</button>
+        <a href="/manage/medicines" class="btn ghost">💊 설치 없이 바로 열어보기</a>
+    </div>
+
+    <div class="card">
+        <h2>🤖 안드로이드 (크롬)</h2>
+        <ol>
+            <li>위 <strong>홈 화면에 앱 설치</strong> 버튼을 누르세요.</li>
+            <li>버튼이 안 보이면 크롬 오른쪽 위 <strong>⋮ → 앱 설치 / 홈 화면에 추가</strong></li>
+            <li>홈 화면에 <strong>{{ app_name }}</strong> 아이콘이 생깁니다.</li>
+        </ol>
+    </div>
+
+    <div class="card">
+        <h2>🍎 아이폰 (사파리)</h2>
+        <ol>
+            <li>사파리 아래쪽 <strong>공유 버튼(⬆️)</strong>을 누르세요.</li>
+            <li><strong>홈 화면에 추가</strong>를 선택하세요.</li>
+            <li>이름이 <strong>{{ app_name }}</strong> 인지 확인하고 <strong>추가</strong>를 누르세요.</li>
+        </ol>
+        <p class="note">※ 아이폰은 반드시 사파리에서 열어야 홈 화면 추가가 가능합니다.</p>
+    </div>
+
+    <p class="note">설치 후 앱을 열면 바로 복약 기록 화면이 뜹니다. 처음 한 번 본인 이름을 선택하면 이후에는 계속 기억됩니다.</p>
+</div>
+<script>
+    // 설치 후(홈 화면 앱으로 실행) 이 페이지가 열리면 바로 복약 기록 화면으로 이동
+    var standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    if (standalone) location.replace('/manage/medicines');
+
+    // 안드로이드 크롬: 설치 프롬프트 버튼
+    var deferred = null;
+    var btn = document.getElementById('install');
+    window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        deferred = e;
+        btn.style.display = 'block';
+    });
+    btn.addEventListener('click', function () {
+        if (!deferred) return;
+        deferred.prompt();
+        deferred = null;
+        btn.style.display = 'none';
+    });
+</script>
+</body>
+</html>

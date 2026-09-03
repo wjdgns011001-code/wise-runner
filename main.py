@@ -28,6 +28,7 @@ from utils import rewards
 from utils import social
 from utils import push
 from utils import meeting
+from utils import medicine
 from utils.score import Score
 
 
@@ -1165,14 +1166,116 @@ async def portal_buy(uid: str = Form(...), item: str = Form(...)):
     return RedirectResponse(url=f"/portal?msg={item}+구매+신청+완료(관리자+승인+대기)", status_code=303)
 
 
+# ──────────────── 복약 기록 ────────────────
+
+@app.get("/manage/medicines", response_class=HTMLResponse)
+async def manage_medicines(request: Request, msg: str = "", page: int = 1):
+    """복약 기록: 내 기록 목록 + 추가 폼. '나'는 쿠키로 식별하며 본인 기록만 보인다."""
+    me = get_me(request)
+    me_user = next((u for u in _registered_users() if u["user_id"] == me), None)
+    now = datetime.now()
+
+    meds, page, total_pages = _paginate(medicine.list_medicines(me) if me else [], page)
+    html = render_template(
+        "manage/medicines.html",
+        active="medicines", meds=meds, me=me, me_user=me_user,
+        users=_registered_users(), msg=msg,
+        today=now.strftime("%Y-%m-%d"), now_time=now.strftime("%H:%M"),
+        stat=medicine.summary(me) if me else None,
+        page=page, total_pages=total_pages,
+    )
+    return HTMLResponse(content=html)
+
+
+@app.post("/manage/medicines/add")
+async def manage_medicines_add(request: Request, name: str = Form(...), dose: str = Form(""),
+                               date: str = Form(""), time: str = Form(""), memo: str = Form(""),
+                               taken: str = Form("")):
+    """복약 기록 추가 (본인 것으로 저장)."""
+    me = get_me(request)
+    if not me:
+        return RedirectResponse(url="/manage/medicines?msg=먼저+이름을+선택하세요", status_code=303)
+    if not (name or "").strip():
+        return RedirectResponse(url="/manage/medicines?msg=약+이름은+필수입니다", status_code=303)
+    medicine.add_medicine(me, name, dose, date, time, memo, taken=bool(taken))
+    return RedirectResponse(url="/manage/medicines?msg=복약+기록이+추가되었습니다", status_code=303)
+
+
+@app.get("/manage/medicines/edit/{mid}", response_class=HTMLResponse)
+async def manage_medicines_edit_form(request: Request, mid: str):
+    """복약 기록 수정 폼 (본인만)."""
+    me = get_me(request)
+    m = medicine.get_medicine(mid)
+    if not m:
+        return RedirectResponse(url="/manage/medicines?msg=기록을+찾을+수+없습니다", status_code=303)
+    if not me or me != m.get("user_id"):
+        return RedirectResponse(url="/manage/medicines?msg=본인만+수정할+수+있어요", status_code=303)
+    html = render_template("manage/medicine_edit.html", active="medicines", m=m)
+    return HTMLResponse(content=html)
+
+
+@app.post("/manage/medicines/edit/{mid}")
+async def manage_medicines_edit(request: Request, mid: str, name: str = Form(...),
+                                dose: str = Form(""), date: str = Form(""), time: str = Form(""),
+                                memo: str = Form(""), taken: str = Form("")):
+    """복약 기록 수정 저장 (본인만)."""
+    me = get_me(request)
+    m = medicine.get_medicine(mid)
+    if not m:
+        return RedirectResponse(url="/manage/medicines?msg=기록을+찾을+수+없습니다", status_code=303)
+    if not me or me != m.get("user_id"):
+        return RedirectResponse(url="/manage/medicines?msg=본인만+수정할+수+있어요", status_code=303)
+    if not (name or "").strip():
+        return RedirectResponse(url=f"/manage/medicines/edit/{mid}", status_code=303)
+    medicine.update_medicine(mid, {
+        "name": name, "dose": dose, "date": date, "time": time,
+        "memo": memo, "taken": bool(taken),
+    }, owner_id=me)
+    return RedirectResponse(url="/manage/medicines?msg=복약+기록이+수정되었습니다", status_code=303)
+
+
+@app.post("/manage/medicines/toggle/{mid}")
+async def manage_medicines_toggle(request: Request, mid: str):
+    """복용 완료 ↔ 아직 안 먹음 토글 (본인만)."""
+    me = get_me(request)
+    if not me:
+        return RedirectResponse(url="/manage/medicines?msg=먼저+이름을+선택하세요", status_code=303)
+    state = medicine.toggle_taken(mid, owner_id=me)
+    if state is None:
+        return RedirectResponse(url="/manage/medicines?msg=본인+기록만+변경할+수+있어요", status_code=303)
+    msg = "복용+완료로+표시했습니다" if state else "아직+안+먹음으로+표시했습니다"
+    return RedirectResponse(url=f"/manage/medicines?msg={msg}", status_code=303)
+
+
+@app.post("/manage/medicines/delete/{mid}")
+async def manage_medicines_delete(request: Request, mid: str):
+    """복약 기록 삭제 (본인만)."""
+    me = get_me(request)
+    if not me:
+        return RedirectResponse(url="/manage/medicines?msg=먼저+이름을+선택하세요", status_code=303)
+    ok = medicine.delete_medicine(mid, owner_id=me)
+    msg = "복약+기록이+삭제되었습니다" if ok else "본인+기록만+삭제할+수+있어요"
+    return RedirectResponse(url=f"/manage/medicines?msg={msg}", status_code=303)
+
+
 # ──────────────── PWA (회원용: 포털 + 채팅) ────────────────
 
-@app.get("/manifest.json")
-async def pwa_manifest():
-    return JSONResponse({
-        "name": "와이즈러너스",
-        "short_name": "와이즈러너스",
-        "start_url": "/manage",
+# 홈 화면(앱) 이름. TEST_APP_NAME 은 기능 테스트용 별도 설치본의 이름이며,
+# 이름만 바꾸고 싶으면 아래 문자열만 수정하면 된다.
+APP_NAME = "와이즈러너스"
+TEST_APP_NAME = "와이즈러너스 플러스"
+
+
+def _manifest(name: str, start_url: str, app_id: str = None) -> dict:
+    """PWA manifest 생성. id 가 다르면 홈 화면에 서로 다른 앱으로 설치된다.
+    (id 를 주지 않으면 브라우저가 start_url 을 id 로 쓰므로 기존 설치본이 그대로 유지된다.)"""
+    m = {}
+    if app_id:
+        m["id"] = app_id
+    m.update({
+        "name": name,
+        "short_name": name,
+        "start_url": start_url,
         "scope": "/",
         "display": "standalone",
         "orientation": "portrait",
@@ -1183,6 +1286,26 @@ async def pwa_manifest():
             {"src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
         ],
     })
+    return m
+
+
+@app.get("/manifest.json")
+async def pwa_manifest():
+    """기존 회원용 앱 — 이름·설치 상태를 그대로 유지한다(id 미지정)."""
+    return JSONResponse(_manifest(APP_NAME, "/manage"))
+
+
+@app.get("/manifest-test.json")
+async def pwa_manifest_test():
+    """기능 테스트용 별도 설치본 — 이름이 다르고 복약 기록 화면에서 시작한다."""
+    return JSONResponse(_manifest(TEST_APP_NAME, "/manage/medicines", app_id="/wise-runner-test"))
+
+
+@app.get("/install-test", response_class=HTMLResponse)
+async def pwa_install_test():
+    """테스트용 앱 설치 안내 페이지 (다른 이름으로 홈 화면에 별도 설치)."""
+    html = render_template("install_test.html", app_name=TEST_APP_NAME, main_app_name=APP_NAME)
+    return HTMLResponse(content=html)
 
 
 @app.get("/sw.js")

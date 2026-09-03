@@ -199,6 +199,7 @@
         <a href="/manage/dashboard" class="{% if active == 'dashboard' %}active{% endif %}">대시보드</a>
         <a href="/manage/meetings" class="{% if active == 'meetings' %}active{% endif %}">정기모임</a>
         <a href="/manage/events" class="{% if active == 'events' %}active{% endif %}">대회참가기록</a>
+        <a href="/manage/medicines" class="{% if active == 'medicines' %}active{% endif %}">복약기록</a>
         <a href="/manage/marathons" class="{% if active == 'marathons' %}active{% endif %}">대회 알아보기</a>
         <a href="/manage/purchases" class="{% if active == 'purchases' %}active{% endif %}">구매내역</a>
         <a href="/manage/files" class="{% if active == 'files' %}active{% endif %}">자료실</a>
@@ -233,10 +234,11 @@
 
         // ── 좌우 스와이프로 탭 전환 (모바일) ──
         (function () {
-            const ORDER = ['feed', 'dashboard', 'meetings', 'events', 'marathons', 'purchases', 'files', 'notices'];
+            const ORDER = ['feed', 'dashboard', 'meetings', 'events', 'medicines', 'marathons', 'purchases', 'files', 'notices'];
             const URLS = {
                 feed: '/manage', dashboard: '/manage/dashboard', meetings: '/manage/meetings',
-                events: '/manage/events', marathons: '/manage/marathons', purchases: '/manage/purchases',
+                events: '/manage/events', medicines: '/manage/medicines',
+                marathons: '/manage/marathons', purchases: '/manage/purchases',
                 files: '/manage/files', notices: '/manage/notices'
             };
             const cur = ORDER.indexOf('{{ active }}');

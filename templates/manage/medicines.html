@@ -1,0 +1,113 @@
+{% extends "manage/base.html" %}
+{% import "manage/_pagination.html" as pg %}
+{% block content %}
+<style>
+    .md-card { border:1px solid #ececf0; border-radius:12px; padding:0.9rem 1rem; margin-bottom:0.8rem; background:#fff; }
+    .md-card.done { background:#f8fdf9; border-color:#dbeee0; }
+    .md-top { display:flex; justify-content:space-between; align-items:flex-start; gap:0.6rem; }
+    .md-name { font-weight:700; font-size:1.02rem; }
+    .md-name .dose { font-weight:500; font-size:0.86rem; color:#777; margin-left:0.35rem; }
+    .md-meta { font-size:0.85rem; color:#666; margin-top:0.35rem; }
+    .md-memo { font-size:0.88rem; color:#444; margin-top:0.45rem; white-space:pre-wrap; }
+    .md-actions { display:flex; gap:0.4rem; align-items:center; flex-wrap:wrap; margin-top:0.7rem; }
+    .md-btn { border:none; cursor:pointer; border-radius:16px; padding:0.35rem 0.85rem; font-size:0.85rem; text-decoration:none; display:inline-block; }
+    .md-btn.take-on { background:#e8f5e9; color:#2e7d32; }
+    .md-btn.take-off { background:#1a1a2e; color:#fff; }
+    .md-btn.edit { background:#e3f2fd; color:#1565c0; }
+    .md-btn.del { background:#ffebee; color:#c62828; }
+</style>
+
+<div class="card">
+    <div class="flex">
+        <h2>💊 복약 기록</h2>
+        <div style="display:flex;align-items:center;gap:0.5rem;">
+            {% if me_user %}
+            <span style="font-size:0.85rem;">나: <strong>{{ me_user.name }}</strong></span>
+            <a href="/whoami/clear?next=/manage/medicines" style="font-size:0.8rem;color:#888;">변경</a>
+            {% else %}
+            <span style="font-size:0.82rem;color:#888;">나:</span>
+            <select onchange="if(this.value)location.href='/login-as?uid='+encodeURIComponent(this.value)+'&next=/manage/medicines'" style="padding:0.4rem 0.6rem;border:1px solid #ddd;border-radius:6px;">
+                <option value="">선택</option>
+                {% for u in users %}<option value="{{ u.user_id }}">{{ u.name }}</option>{% endfor %}
+            </select>
+            {% endif %}
+        </div>
+    </div>
+    {% if msg %}<p style="margin-top:0.7rem;color:#2e7d32;font-size:0.9rem;">✅ {{ msg }}</p>{% endif %}
+    {% if me_user %}
+    <p style="margin-top:0.6rem;font-size:0.85rem;color:#888;">복약 기록은 <strong>본인만</strong> 보고 수정할 수 있어요. 러닝 점수에는 영향을 주지 않습니다.</p>
+    {% if stat %}
+    <div class="stat-grid" style="margin-top:0.9rem;">
+        <div class="stat-item"><div class="value">{{ stat.today }}</div><div class="label">오늘 기록</div></div>
+        <div class="stat-item"><div class="value">{{ stat.today_taken }}</div><div class="label">오늘 복용 완료</div></div>
+        <div class="stat-item"><div class="value">{{ stat.today_left }}</div><div class="label">아직 안 먹음</div></div>
+        <div class="stat-item"><div class="value">{{ stat.total }}</div><div class="label">전체 기록</div></div>
+    </div>
+    {% endif %}
+    {% else %}
+    <p style="margin-top:0.6rem;font-size:0.85rem;color:#888;">복약 기록을 보거나 추가하려면 위에서 본인 이름을 선택하세요.</p>
+    {% endif %}
+</div>
+
+{% if me_user %}
+<div class="card">
+    <h2>➕ 약 먹은 기록 추가</h2>
+    <form method="post" action="/manage/medicines/add" style="display:flex;flex-direction:column;gap:0.6rem;">
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <input type="text" name="name" placeholder="약 이름 (예: 타이레놀)" required
+                   style="flex:2;min-width:160px;padding:0.6rem;border:1px solid #ddd;border-radius:6px;">
+            <input type="text" name="dose" placeholder="복용량 (예: 1정)"
+                   style="flex:1;min-width:120px;padding:0.6rem;border:1px solid #ddd;border-radius:6px;">
+        </div>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <input type="date" name="date" value="{{ today }}"
+                   style="padding:0.6rem;border:1px solid #ddd;border-radius:6px;">
+            <input type="time" name="time" value="{{ now_time }}"
+                   style="padding:0.6rem;border:1px solid #ddd;border-radius:6px;">
+            <label style="display:flex;align-items:center;gap:0.35rem;font-size:0.88rem;color:#555;">
+                <input type="checkbox" name="taken" value="1" checked> 복용 완료
+            </label>
+        </div>
+        <textarea name="memo" placeholder="메모 (선택) — 예: 식후 30분" rows="2"
+                  style="padding:0.6rem;border:1px solid #ddd;border-radius:6px;font-family:inherit;resize:vertical;"></textarea>
+        <button type="submit" class="refresh-btn" style="align-self:flex-start;">기록 추가</button>
+    </form>
+</div>
+{% endif %}
+
+<div class="card">
+    <h2>📋 내 복약 기록</h2>
+    {% if meds %}
+    {% for m in meds %}
+    <div class="md-card {% if m.taken %}done{% endif %}">
+        <div class="md-top">
+            <div>
+                <div class="md-name">{{ m.name }}{% if m.dose %}<span class="dose">{{ m.dose }}</span>{% endif %}
+                    {% if m.taken %}<span class="badge badge-success" style="font-size:0.7rem;">복용 완료</span>
+                    {% else %}<span class="badge badge-warning" style="font-size:0.7rem;">아직 안 먹음</span>{% endif %}
+                </div>
+                <div class="md-meta">📅 {{ m.date }}{% if m.time %} · ⏰ {{ m.time }}{% endif %}</div>
+            </div>
+        </div>
+        {% if m.memo %}<div class="md-memo">{{ m.memo }}</div>{% endif %}
+        <div class="md-actions">
+            <form method="post" action="/manage/medicines/toggle/{{ m.id }}">
+                <button type="submit" class="md-btn {% if m.taken %}take-on{% else %}take-off{% endif %}">
+                    {% if m.taken %}✅ 복용 완료{% else %}💊 먹었어요{% endif %}
+                </button>
+            </form>
+            <a href="/manage/medicines/edit/{{ m.id }}" class="md-btn edit">✏️ 수정</a>
+            <form method="post" action="/manage/medicines/delete/{{ m.id }}" onsubmit="return confirm('이 복약 기록을 삭제할까요?');">
+                <button type="submit" class="md-btn del">🗑 삭제</button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+    {{ pg.bar('/manage/medicines', page, total_pages) }}
+    {% elif me_user %}
+    <p style="font-size:0.88rem;color:#999;padding:0.6rem 0;">아직 복약 기록이 없습니다. 위에서 첫 기록을 추가해 보세요.</p>
+    {% else %}
+    <p style="font-size:0.88rem;color:#999;padding:0.6rem 0;">이름을 선택하면 내 복약 기록이 표시됩니다.</p>
+    {% endif %}
+</div>
+{% endblock %}

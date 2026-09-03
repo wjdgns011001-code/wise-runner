@@ -1,0 +1,32 @@
+{% extends "manage/base.html" %}
+{% block content %}
+<div class="card" style="max-width:460px;margin:1.5rem auto;">
+    <div class="flex">
+        <h2>💊 복약 기록 수정</h2>
+        <a href="/manage/medicines" class="refresh-btn">← 돌아가기</a>
+    </div>
+    <p style="font-size:0.82rem;color:#888;margin:0.5rem 0 1rem;">본인이 등록한 기록만 수정할 수 있습니다.</p>
+    <form method="post" action="/manage/medicines/edit/{{ m.id }}" style="display:flex;flex-direction:column;gap:0.7rem;">
+        <label class="f">약 이름</label>
+        <input type="text" name="name" value="{{ m.name }}" required
+               style="padding:0.6rem;border:1px solid #ddd;border-radius:6px;">
+        <label class="f">복용량</label>
+        <input type="text" name="dose" value="{{ m.dose or '' }}" placeholder="예: 1정"
+               style="padding:0.6rem;border:1px solid #ddd;border-radius:6px;">
+        <label class="f">날짜</label>
+        <input type="date" name="date" value="{{ m.date }}"
+               style="padding:0.6rem;border:1px solid #ddd;border-radius:6px;">
+        <label class="f">시간</label>
+        <input type="time" name="time" value="{{ m.time or '' }}"
+               style="padding:0.6rem;border:1px solid #ddd;border-radius:6px;">
+        <label class="f">메모</label>
+        <textarea name="memo" rows="3" placeholder="예: 식후 30분"
+                  style="padding:0.6rem;border:1px solid #ddd;border-radius:6px;font-family:inherit;resize:vertical;">{{ m.memo or '' }}</textarea>
+        <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.88rem;color:#555;margin-top:0.2rem;">
+            <input type="checkbox" name="taken" value="1" {% if m.taken %}checked{% endif %}> 복용 완료
+        </label>
+        <button type="submit" class="refresh-btn" style="margin-top:0.5rem;padding:0.6rem;">저장</button>
+    </form>
+</div>
+<style>.f{font-size:0.82rem;color:#666;margin-bottom:-0.3rem;}</style>
+{% endblock %}
